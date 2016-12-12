@@ -1,0 +1,18 @@
+Schematic for using ADXL362Z acclerometer with an msp430fr5969
+
+Pin names on the left correspond to the pins on the accelerometer.
+Pin names on the right correspond to MSP430FR5969 physical pin names.
+
+CS-->pin16 (GPIO P4.0)
+MISO-->pin25 (UCA0SOMI)
+MOSI-->pin24 (UCA0SIMO)
+SCLK-->pin11 (UCA0CLK)
+GND-->pin36  (DVSS)
+GND-->pin36  (DVSS) [there are two GND pins on the accelerometer]
+VS-->pin37   (DVCC)
+VID-->pin37  (DVCC)
+
+
+Wire up the ADXL362Z according to this pin diagram.  Then, you can use the
+API described in adxl362z.h to access the accelerometer.  acctest.c
+shows a functioning series of api calls that gets accel readings in a loop.

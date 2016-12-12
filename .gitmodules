@@ -16,3 +16,22 @@
 [submodule "ext/edb-console"]
 	path = ext/edb-console
     url = https://github.com/CMUAbstract/edb-console
+[submodule "ext/libmspbuiltins"]
+	path = ext/libmspbuiltins
+	url = https://github.com/CMUAbstract/libmspbuiltins
+[submodule "ext/mementos"]
+	path = ext/mementos
+	url = https://github.com/CMUAbstract/mementos
+	branch = maker
+[submodule "libio"]
+	path = libio
+	url = https://github.com/CMUAbstract/libio.git
+[submodule "ext/libio"]
+	path = ext/libio
+	url = https://github.com/CMUAbstract/libio.git
+[submodule "ext/libmspconsole"]
+	path = ext/libmspconsole
+	url = https://github.com/CMUAbstract/libmspconsole.git
+[submodule "ext/libmspprintf"]
+	path = ext/libmspprintf
+	url = https://github.com/CMUAbstract/libmspprintf.git

@@ -1,0 +1,13 @@
+atomic - a DINO microbenchmark
+-------------------------------
+
+The purpose of this benchmark is to determine how much error is introduced into
+a computation due to failures.  The failure mode this benchmark helps study is
+inconsistency that failures during atomic updates of large regions of NV
+memory, followed by restarts of the program's execution.
+
+The program creates a giant array and does passes over it, incrementing each
+element.  After each pass, all values in the array should be the same.  if the
+atomicity of a pass is violated, the values may differ, if some are incremented
+and others are not.  The error of an execution is characterized by a curve that
+shows the error as a function of the entry in the array. 

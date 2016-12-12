@@ -1,0 +1,62 @@
+# This is the Makefile for using the DINO toolchain to build an app.
+# Include it from a bld/dino directory in your app (built with 'maker').
+
+include $(MAKER_ROOT)/Makefile.env
+
+#DINO_MODE ?= auto
+
+#ifeq ($(DINO_MODE),manual)
+#LOCAL_CFLAGS += -DDINO_MODE_MANUAL
+#else ifeq ($(DINO_MODE),semiauto)
+#LOCAL_CFLAGS += -DDINO_MODE_MANUAL
+#else ifeq ($(DINO_MODE),auto)
+#LOCAL_CFLAGS += -DDINO_MODE_AUTO
+#else
+#$(error Unrecognized DINO mode: $(DINO_MODE))
+#endif
+
+# Part of DINO's target makefile responsibility is to configure
+# Mementos. Mementos configuration is not exposed to target.
+
+#MEMENTOS_MODE = manual
+#include $(MEMENTOS_ROOT)/Makefile.flags
+
+LOCAL_CFLAGS += -DALPACA
+
+#ALPACA_LIB = 
+ALPACA_LIB = $(ALPACA_ROOT)/LLVM/build/skeleton/libSkeletonPass.so
+
+#ifeq ($(DINO_MODE),auto)
+%.alpaca.bc : %.bc
+	$(OPT) -debug -stats -load $(ALPACA_LIB) \
+	  -alpaca \
+	  -o $@ $<
+#	$(OPT) -debug -stats \
+#	  -o $@ $<
+	#  -dino--task-split \
+#	  -dino--task-boundaries \
+#	  -dino--versioner \
+#	  -dino--task-cost \
+#	  -dot-cfg \
+#	  -o $@ $<
+
+LINK_OBJECTS = $(OBJECTS:.o=.alpaca.bc)
+
+#else # DINO_MODE = manual || semiauto
+
+#%.dino.bc : %.bc
+#	cp $^ $@
+
+#endif # DINO_MODE = auto
+
+override DEPS += \
+	libalpaca \
+
+DEP_ROOT_libalpaca = $(ALPACA_ROOT)/AlpacaRuntime
+
+override CLFAGS += $(LOCAL_CFLAGS) \
+
+include $(MAKER_ROOT)/Makefile.clang
+
+# do not remove any intermediate artifacts
+.SECONDARY:

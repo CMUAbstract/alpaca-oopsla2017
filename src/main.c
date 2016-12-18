@@ -70,6 +70,9 @@ void TimerB1_ISR(void){
 __attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
 void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
+__nv unsigned data[MAX_DIRTY_GV_SIZE];
+__nv uint8_t* data_dest[MAX_DIRTY_GV_SIZE];
+__nv unsigned data_size[MAX_DIRTY_GV_SIZE];
 
 typedef unsigned index_t;
 typedef unsigned letter_t;
@@ -114,6 +117,25 @@ TASK(12, task_done)
 	GLOBAL_SB(node_t, sibling_node);
 	GLOBAL_SB(index_t, symbol);
 
+	GLOBAL_SB(letter_t, letter_bak);
+	GLOBAL_SB(unsigned, letter_idx_bak);
+#ifdef TEST_SAMPLE_DATA
+	GLOBAL_SB(sample_t, prev_sample_bak);
+#endif
+	GLOBAL_SB(index_t, out_len_bak);
+	GLOBAL_SB(index_t, node_count_bak);
+	GLOBAL_SB(node_t, dict_bak, DICT_SIZE);
+	GLOBAL_SB(sample_t, sample_bak);
+	GLOBAL_SB(index_t, sample_count_bak);
+	GLOBAL_SB(index_t, sibling_bak);
+	GLOBAL_SB(index_t, child_bak);
+	GLOBAL_SB(index_t, parent_bak);
+	GLOBAL_SB(index_t, parent_next_bak);
+	GLOBAL_SB(node_t, parent_node_bak);
+	GLOBAL_SB(node_t, compressed_data_bak, BLOCK_SIZE);
+	GLOBAL_SB(node_t, sibling_node_bak);
+	GLOBAL_SB(index_t, symbol_bak);
+
 //void write_to_gbuf(const void *value, void* data_addr, size_t var_size){
 
 //}
@@ -151,6 +173,7 @@ void init()
 
 	INIT_CONSOLE();
 	__enable_interrupt();
+	set_dirty_buf(&data, &data_dest, &data_size);
 }
 
 static sample_t acquire_sample(letter_t prev_sample)
@@ -555,7 +578,7 @@ void task_done()
 
 	PRINTF("Total: %u\r\n", mem);
 	// TRANSITION_TO(task_done);
-//	TRANSITION_TO(task_init);
+	TRANSITION_TO(task_init);
 }
 
 	ENTRY_TASK(task_init)

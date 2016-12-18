@@ -70,9 +70,9 @@ void TimerB1_ISR(void){
 __attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
 void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
-__nv unsigned data[MAX_DIRTY_GV_SIZE];
-__nv uint8_t* data_dest[MAX_DIRTY_GV_SIZE];
-__nv unsigned data_size[MAX_DIRTY_GV_SIZE];
+//__nv unsigned data[MAX_DIRTY_GV_SIZE];
+//__nv uint8_t* data_dest[MAX_DIRTY_GV_SIZE];
+//__nv unsigned data_size[MAX_DIRTY_GV_SIZE];
 
 typedef unsigned index_t;
 typedef unsigned letter_t;
@@ -173,7 +173,8 @@ void init()
 
 	INIT_CONSOLE();
 	__enable_interrupt();
-	set_dirty_buf(&data, &data_dest, &data_size);
+	//set_dirty_buf(&data, &data_dest, &data_size);
+	set_dirty_buf();
 }
 
 static sample_t acquire_sample(letter_t prev_sample)
@@ -563,12 +564,12 @@ void task_done()
 	mem+=sizeof(num_arr);
 #endif
 #if GBUF > 0
-	PRINTF("Size of data[i]: %u\r\n", sizeof(data));
-	mem+=sizeof(data);
-	PRINTF("Size of data_dest[i]: %u\r\n", sizeof(data_dest));
-	mem+=sizeof(data_dest);
-	PRINTF("Size of data_size[i]: %u\r\n", sizeof(data_size));
-	mem+=sizeof(data_size);
+//	PRINTF("Size of data[i]: %u\r\n", sizeof(data));
+//	mem+=sizeof(data);
+//	PRINTF("Size of data_dest[i]: %u\r\n", sizeof(data_dest));
+//	mem+=sizeof(data_dest);
+//	PRINTF("Size of data_size[i]: %u\r\n", sizeof(data_size));
+//	mem+=sizeof(data_size);
 #else
 	PRINTF("Size of dirty_gvs: %u\r\n", sizeof(dirty_gv));
 	mem+=sizeof(dirty_gv);
@@ -578,7 +579,7 @@ void task_done()
 
 	PRINTF("Total: %u\r\n", mem);
 	// TRANSITION_TO(task_done);
-	TRANSITION_TO(task_init);
+//	TRANSITION_TO(task_init);
 }
 
 	ENTRY_TASK(task_init)

@@ -48,31 +48,19 @@
 #define TASK_PROLOGUE()
 #endif // !CONT_POWER
 unsigned overflow=0;
-//__attribute__((interrupt(TIMERB1_VECTOR))) 
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
+void __attribute__((interrupt(TIMERB1_VECTOR))) TimerB1_ISR(void){
 	TBCTL &= ~(0x0002);
 	if(TBCTL && 0x0001){
+		//		blink_led_both(3,LENGTH);
+		//		blink_led_both(3,LENGTH);
 		overflow++;
 		TBCTL |= 0x0004;
 		TBCTL |= (0x0002);
 		TBCTL &= ~(0x0001);	
 	}
+	//	while(1);
+	//  P1OUT ^= 0x01;                            // Toggle P1.0
 }
-
-
-// Have to define the vector table elements manually, because clang,
-// unlike gcc, does not generate sections for the vectors, it only
-// generates symbols (aliases). The linker script shipped in the
-// TI GCC distribution operates on sections, so we define a symbol and put it
-// in its own section here named as the linker script wants it.
-// The 2 bytes per alias symbol defined by clang are wasted.
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
-
-//__nv unsigned data[MAX_DIRTY_GV_SIZE];
-//__nv uint8_t* data_dest[MAX_DIRTY_GV_SIZE];
-//__nv unsigned data_size[MAX_DIRTY_GV_SIZE];
 
 typedef unsigned index_t;
 typedef unsigned letter_t;
@@ -129,6 +117,7 @@ static void init_hw()
 
 void init()
 {
+#if 0
 	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
 	TBCTL |= 0x0200; //set 9 to one (SMCLK)
 	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
@@ -136,17 +125,21 @@ void init()
 	TBCTL &= 0xFFEF; //set bit 4 to zero
 	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
 	TBCTL |= 0x0002; //interrupt enable
-//	TBCTL &= ~(0x0002); //interrupt disable
-#if (RTIME > 0) || (WTGTIME > 0) || (CTIME > 0)
+#if (RTIME > 0) || (WTIME > 0) || (CTIME > 0)
 	TBCTL &= ~(0x0020); //set bit 5 to zero(halt!)
+#endif
 #endif
     	init_hw();
 //	WISP_init();
+//	P2DIR = BIT0; 
+//	P2OUT &= (~BIT1);
 	GPIO(PORT_LED_1, DIR) |= BIT(PIN_LED_1);
 	GPIO(PORT_LED_2, DIR) |= BIT(PIN_LED_2);
 #if defined(PORT_LED_3)
 	GPIO(PORT_LED_3, DIR) |= BIT(PIN_LED_3);
 #endif
+//	while(1);
+
 #ifdef CONFIG_EDB
 	//debug_setup();
 	edb_init();
@@ -154,8 +147,10 @@ void init()
 
 	INIT_CONSOLE();
 	__enable_interrupt();
-	//set_dirty_buf(&data, &data_dest, &data_size);
-	set_dirty_buf();
+//	P2DIR = 0; 
+	while(1){
+		PRINTF("test\r\n");
+	}
 }
 
 static sample_t acquire_sample(letter_t prev_sample)
@@ -190,6 +185,8 @@ static sample_t acquire_sample(letter_t prev_sample)
 }
 void task_init()
 {
+//	PRINTF("test start!!\n");
+	//  TASK_PROLOGUE();
 	LOG("init\r\n");
 
 	GV(parent_next) = 0;
@@ -211,6 +208,7 @@ void task_init()
 
 void task_init_dict()
 {
+
 	LOG("init dict: letter %u\r\n", GV(letter));
 
 	node_t node = {
@@ -312,7 +310,7 @@ void task_compress()
 	//
 	// NOTE: source of inefficiency: we execute this on every step of traversal
 	// over the nodes in the tree, but really need this only for the last one.
-	GV(parent_node) = parent_node; //------->> BUG HERE??????
+	GV(parent_node) = parent_node;
 	GV(parent) = parent;
 	GV(child) = parent_node.child;
 
@@ -401,7 +399,7 @@ void task_add_node()
 
 		node_t sibling_node_obj = *sibling_node;
 		
-//		GV(sibling) = GV(sibling);
+		GV(sibling) = GV(sibling);
 		GV(sibling_node) = sibling_node_obj;
 
 		TRANSITION_TO(task_add_insert);
@@ -545,12 +543,12 @@ void task_done()
 	mem+=sizeof(num_arr);
 #endif
 #if GBUF > 0
-//	PRINTF("Size of data[i]: %u\r\n", sizeof(data));
-//	mem+=sizeof(data);
-//	PRINTF("Size of data_dest[i]: %u\r\n", sizeof(data_dest));
-//	mem+=sizeof(data_dest);
-//	PRINTF("Size of data_size[i]: %u\r\n", sizeof(data_size));
-//	mem+=sizeof(data_size);
+	PRINTF("Size of data[i]: %u\r\n", sizeof(data));
+	mem+=sizeof(data);
+	PRINTF("Size of data_dest[i]: %u\r\n", sizeof(data_dest));
+	mem+=sizeof(data_dest);
+	PRINTF("Size of data_size[i]: %u\r\n", sizeof(data_size));
+	mem+=sizeof(data_size);
 #else
 	PRINTF("Size of dirty_gvs: %u\r\n", sizeof(dirty_gv));
 	mem+=sizeof(dirty_gv);
@@ -560,7 +558,7 @@ void task_done()
 
 	PRINTF("Total: %u\r\n", mem);
 	// TRANSITION_TO(task_done);
-//	TRANSITION_TO(task_init);
+	//      TRANSITION_TO(task_init);
 }
 
 	ENTRY_TASK(task_init)

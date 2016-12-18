@@ -155,7 +155,7 @@ void init()
 	INIT_CONSOLE();
 	__enable_interrupt();
 	//set_dirty_buf(&data, &data_dest, &data_size);
-	set_dirty_buf();
+//	set_dirty_buf();
 }
 
 static sample_t acquire_sample(letter_t prev_sample)

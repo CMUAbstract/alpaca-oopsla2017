@@ -13,6 +13,7 @@
 #include <libmsp/clock.h>
 #include <libmsp/watchdog.h>
 #include <libmsp/gpio.h>
+#include <libmspmath/msp-math.h>
 
 #ifdef CONFIG_LIBEDB_PRINTF
 #include <libedb/edb.h>
@@ -20,45 +21,77 @@
 
 #include "pins.h"
 
-#define TEST_SAMPLE_DATA
+// #define VERBOSE
 
-#define NIL 0 // like NULL, but for indexes, not real pointers
+#include "../data/keysize.h"
 
-#define DICT_SIZE         512
-#define BLOCK_SIZE         64
+#define KEY_SIZE_BITS   128
+#define DIGIT_BITS       8 // arithmetic ops take 8-bit args produce 16-bit result
+#define DIGIT_MASK       0x00ff
+#define NUM_DIGITS       (KEY_SIZE_BITS / DIGIT_BITS)
 
-#if 0 // These are largest Mementos with volatile vars can handle
-#define DICT_SIZE         280
-#define BLOCK_SIZE         16
+/** @brief Type large enough to store a product of two digits */
+typedef uint16_t digit_t;
+//typedef uint8_t digit_t;
+
+typedef struct {
+	uint8_t n[NUM_DIGITS]; // modulus
+	digit_t e;  // exponent
+} pubkey_t;
+
+#if NUM_DIGITS < 2
+#error The modular reduction implementation requires at least 2 digits
 #endif
 
-#define NUM_LETTERS_IN_SAMPLE        2
-#define LETTER_MASK             0x00FF
-#define LETTER_SIZE_BITS             8
-#define NUM_LETTERS (LETTER_MASK + 1)
+#define LED1 (1 << 0)
+#define LED2 (1 << 1)
 
-#define DELAY() do { \
-	uint32_t delay = 0x2ffff; \
-	while (delay--); \
-} while (0);
+#define SEC_TO_CYCLES 4000000 /* 4 MHz */
 
-#ifdef CONT_POWER
-#define TASK_PROLOGUE() DELAY()
-#else // !CONT_POWER
-#define TASK_PROLOGUE()
-#endif // !CONT_POWER
+#define BLINK_DURATION_BOOT (5 * SEC_TO_CYCLES)
+#define BLINK_DURATION_TASK SEC_TO_CYCLES
+#define BLINK_BLOCK_DONE    (1 * SEC_TO_CYCLES)
+#define BLINK_MESSAGE_DONE  (2 * SEC_TO_CYCLES)
+
+#define PRINT_HEX_ASCII_COLS 8
+
+// #define SHOW_PROGRESS_ON_LED
+// #define SHOW_COARSE_PROGRESS_ON_LED
+
+// Blocks are padded with these digits (on the MSD side). Padding value must be
+// chosen such that block value is less than the modulus. This is accomplished
+// by any value below 0x80, because the modulus is restricted to be above
+// 0x80 (see comments below).
+static const uint8_t PAD_DIGITS[] = { 0x01 };
+#define NUM_PAD_DIGITS (sizeof(PAD_DIGITS) / sizeof(PAD_DIGITS[0]))
+
+// To generate a key pair: see scripts/
+
+// modulus: byte order: LSB to MSB, constraint MSB>=0x80
+static __ro_nv const pubkey_t pubkey = {
+#include "../data/key128.txt"
+};
+
+static __ro_nv const unsigned char PLAINTEXT[] =
+#include "../data/plaintext.txt"
+;
+
+#define NUM_PLAINTEXT_BLOCKS (sizeof(PLAINTEXT) / (NUM_DIGITS - NUM_PAD_DIGITS) + 1)
+#define CYPHERTEXT_SIZE (NUM_PLAINTEXT_BLOCKS * NUM_DIGITS)
+
+// If you link-in wisp-base, then you have to define some symbols.
+//uint8_t usrBank[USRBANK_SIZE];
 unsigned overflow=0;
-//__attribute__((interrupt(TIMERB1_VECTOR))) 
 __attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
+	void TimerB1_ISR(void){
+		TBCTL &= ~(0x0002);
+		if(TBCTL && 0x0001){
+			overflow++;
+			TBCTL |= 0x0004;
+			TBCTL |= (0x0002);
+			TBCTL &= ~(0x0001);	
+		}
 	}
-}
 
 
 // Have to define the vector table elements manually, because clang,
@@ -70,63 +103,58 @@ void TimerB1_ISR(void){
 __attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
 void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
-//__nv unsigned data[MAX_DIRTY_GV_SIZE];
-//__nv uint8_t* data_dest[MAX_DIRTY_GV_SIZE];
-//__nv unsigned data_size[MAX_DIRTY_GV_SIZE];
+	TASK(1,  task_init)
+	TASK(2,  task_pad)
+	TASK(3,  task_exp)
+	TASK(4,  task_mult_block)
+	TASK(5,  task_mult_block_get_result)
+	TASK(6,  task_square_base)
+	TASK(7,  task_square_base_get_result)
+	TASK(8,  task_print_cyphertext)
+	TASK(9,  task_mult_mod)
+	TASK(10,  task_mult)
+	TASK(11, task_reduce_digits)
+	TASK(12, task_reduce_normalizable)
+	TASK(13, task_reduce_normalize)
+	TASK(14, task_reduce_n_divisor)
+	TASK(15, task_reduce_quotient)
+	TASK(16, task_reduce_multiply)
+	TASK(17, task_reduce_compare)
+	TASK(18, task_reduce_add)
+	TASK(19, task_reduce_subtract)
+TASK(20, task_print_product)
 
-typedef unsigned index_t;
-typedef unsigned letter_t;
-typedef unsigned sample_t;
+	//GLOBAL_SB(digit_t, product, NUM_DIGITS * 2);
+	GLOBAL_SB(digit_t, product, 32);
+	GLOBAL_SB(digit_t, exponent);
+	GLOBAL_SB(digit_t, exponent_next);
+	GLOBAL_SB(unsigned, block_offset);
+	GLOBAL_SB(unsigned, message_length);
+	GLOBAL_SB(unsigned, cyphertext_len);
+	//GLOBAL_SB(digit_t, base, NUM_DIGITS * 2);
+	GLOBAL_SB(digit_t, base, 32);
+	GLOBAL_SB(digit_t, modulus, NUM_DIGITS);
+	GLOBAL_SB(digit_t, digit);
+	GLOBAL_SB(digit_t, carry);
+	GLOBAL_SB(unsigned, reduce);
+	GLOBAL_SB(digit_t, cyphertext, CYPHERTEXT_SIZE);
+	GLOBAL_SB(unsigned, offset);
+	GLOBAL_SB(digit_t, n_div);
+	GLOBAL_SB(task_t*, next_task);
+	//GLOBAL_SB(digit_t, product2, NUM_DIGITS * 2);
+	GLOBAL_SB(digit_t, product2, 32);
+	GLOBAL_SB(task_t*, next_task_print);
+	GLOBAL_SB(digit_t, block, 32);
+	//GLOBAL_SB(digit_t, block, NUM_DIGITS * 2);
+	GLOBAL_SB(unsigned, quotient);
+	GLOBAL_SB(bool, print_which);
 
-// NOTE: can't use pointers, since need to ChSync, etc
-typedef struct _node_t {
-	letter_t letter; // 'letter' of the alphabet
-	index_t sibling; // this node is a member of the parent's children list
-	index_t child;   // link-list of children
-} node_t;
-
-	TASK(1, task_init)
-	TASK(2, task_init_dict)
-	TASK(3, task_sample)
-	TASK(4, task_measure_temp)
-	TASK(5, task_letterize)
-	TASK(6, task_compress)
-	TASK(7, task_find_sibling)
-	TASK(8, task_add_node)
-	TASK(9, task_add_insert)
-	TASK(10, task_append_compressed)
-	TASK(11, task_print)
-TASK(12, task_done)
-
-	GLOBAL_SB(letter_t, letter);
-	GLOBAL_SB(unsigned, letter_idx);
-#ifdef TEST_SAMPLE_DATA
-	GLOBAL_SB(sample_t, prev_sample);
-#endif
-	GLOBAL_SB(index_t, out_len);
-	GLOBAL_SB(index_t, node_count);
-	GLOBAL_SB(node_t, dict, DICT_SIZE);
-	GLOBAL_SB(sample_t, sample);
-	GLOBAL_SB(index_t, sample_count);
-	GLOBAL_SB(index_t, sibling);
-	GLOBAL_SB(index_t, child);
-	GLOBAL_SB(index_t, parent);
-	GLOBAL_SB(index_t, parent_next);
-	GLOBAL_SB(node_t, parent_node);
-	GLOBAL_SB(node_t, compressed_data, BLOCK_SIZE);
-	GLOBAL_SB(node_t, sibling_node);
-	GLOBAL_SB(index_t, symbol);
-
-//void write_to_gbuf(const void *value, void* data_addr, size_t var_size){
-
-//}
 static void init_hw()
 {
-    msp_watchdog_disable();
-    msp_gpio_unlock();
-    msp_clock_setup();
+	msp_watchdog_disable();
+	msp_gpio_unlock();
+	msp_clock_setup();
 }
-
 void init()
 {
 	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
@@ -136,431 +164,776 @@ void init()
 	TBCTL &= 0xFFEF; //set bit 4 to zero
 	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
 	TBCTL |= 0x0002; //interrupt enable
-//	TBCTL &= ~(0x0002); //interrupt disable
-#if (RTIME > 0) || (WTGTIME > 0) || (CTIME > 0)
+#if (RTIME > 0) || (WTIME > 0) || (CTIME > 0)
 	TBCTL &= ~(0x0020); //set bit 5 to zero(halt!)
 #endif
-    	init_hw();
-//	WISP_init();
+	init_hw();
+
+#ifdef CONFIG_EDB
+	edb_init();
+#endif
+
+	//#if defined(CONFIG_LIBEDB_PRINTF_BARE)
+	//    BARE_PRINTF_ENABLE();
+	//#elif defined(CONFIG_LIBMSPCONSOLE_PRINTF)
+	//    UART_init();
+	//#endif
+	INIT_CONSOLE();
+
 	GPIO(PORT_LED_1, DIR) |= BIT(PIN_LED_1);
 	GPIO(PORT_LED_2, DIR) |= BIT(PIN_LED_2);
 #if defined(PORT_LED_3)
 	GPIO(PORT_LED_3, DIR) |= BIT(PIN_LED_3);
 #endif
-#ifdef CONFIG_EDB
-	//debug_setup();
-	edb_init();
-#endif
 
-	INIT_CONSOLE();
 	__enable_interrupt();
-	//set_dirty_buf(&data, &data_dest, &data_size);
-//	set_dirty_buf();
-}
 
-static sample_t acquire_sample(letter_t prev_sample)
-{
-#ifdef TEST_SAMPLE_DATA
-	//letter_t sample = rand() & 0x0F;
-	letter_t sample = (prev_sample + 1) & 0x03;
-	return sample;
-#else
-	ADC12CTL0 &= ~ADC12ENC; // disable conversion so we can set control bits
-	ADC12CTL0 = ADC12SHT0_2 + ADC12ON; // sampling time, ADC12 on
-	ADC12CTL1 = ADC12SHP + ADC12CONSEQ_0; // use sampling timer, single-channel, single-conversion
-
-	ADC12CTL3 &= ADC12TCMAP; // enable temperature sensor
-	ADC12MCTL0 = ADC12INCH_30; // temp sensor
-
-	ADC12CTL0 |= ADC12ENC; // enable ADC
-
-	// Trigger
-	ADC12CTL0 &= ~ADC12SC;  // 'start conversion' bit must be toggled
-	ADC12CTL0 |= ADC12SC; // start conversion
-
-	while (ADC12CTL1 & ADC12BUSY); // wait for conversion to complete
-
-	ADC12CTL3 &= ~ADC12TCMAP; // disable temperature sensor
-
-	sample_t sample = ADC12MEM0;
-	LOG("sample: %04x\r\n", sample);
-
-	return sample;
-#endif
-}
-void task_init()
-{
-	LOG("init\r\n");
-
-	GV(parent_next) = 0;
-
-	LOG("init: start parent %u\r\n", GV(parent));
-
-	GV(out_len) = 0;
-
-	GV(letter) = 0;
-#ifdef TEST_SAMPLE_DATA
-	GV(prev_sample) = 0;
-#endif
-	GV(letter_idx) = 0;;
-
-	GV(sample_count) = 1;
-
-	TRANSITION_TO(task_init_dict);
-}
-
-void task_init_dict()
-{
-	LOG("init dict: letter %u\r\n", GV(letter));
-
-	node_t node = {
-		.letter = GV(letter),
-		.sibling = NIL, // no siblings for 'root' nodes
-		.child = NIL, // init an empty list for children
-	};
-	int i = GV(letter);	
-	GV(dict, i) = node; // ------------------------------------->>>>BUG
-
-	GV(letter)++;
-	if (GV(letter) < NUM_LETTERS) {
-		TRANSITION_TO(task_init_dict);
-	} else {
-		GV(node_count) = NUM_LETTERS;
-		TRANSITION_TO(task_sample);
-	} 
-}
-
-void task_sample()
-{
-	LOG("sample: letter idx %u\r\n", GV(letter_idx));
-
-	unsigned next_letter_idx = GV(letter_idx) + 1;
-	if (next_letter_idx == NUM_LETTERS_IN_SAMPLE)
-		next_letter_idx = 0;
-
-
-	if (GV(letter_idx) == 0) {
-		GV(letter_idx) = next_letter_idx;
-		TRANSITION_TO(task_measure_temp);
-	} else {
-		GV(letter_idx) = next_letter_idx;
-		TRANSITION_TO(task_letterize);
-	}
-}
-
-void task_measure_temp()
-{
-	//  TASK_PROLOGUE();
-
-	sample_t prev_sample;
-
-#ifdef TEST_SAMPLE_DATA
-	prev_sample = GV(prev_sample);
-#else
-	prev_sample = 0;
+#if defined(PORT_LED_3) // when available, this LED indicates power-on
+	GPIO(PORT_LED_3, OUT) |= BIT(PIN_LED_3);
 #endif
 
-	sample_t sample = acquire_sample(prev_sample);
-	LOG("measure: %u\r\n", sample);
-
-#ifdef TEST_SAMPLE_DATA
-	prev_sample = sample;
-	GV(prev_sample) = prev_sample;
-#endif
-	GV(sample) = sample;
-	TRANSITION_TO(task_letterize);
+	//   PRINTF(".%u.\r\n", curctx->task->idx);
 }
 
-void task_letterize()
-{
-	unsigned letter_idx = GV(letter_idx);
-	if (letter_idx == 0)
-		letter_idx = NUM_LETTERS_IN_SAMPLE;
-	else
-		letter_idx--;
-	unsigned letter_shift = LETTER_SIZE_BITS * letter_idx;
-	letter_t letter = (GV(sample) & (LETTER_MASK << letter_shift)) >> letter_shift;
-
-	LOG("letterize: sample %x letter %x (%u)\r\n", GV(sample), letter, letter);
-	
-	GV(letter) = letter;
-	TRANSITION_TO(task_compress);
-}
-
-void task_compress()
-{
-	// TASK_PROLOGUE();
-
-	node_t parent_node;
-
-	// pointer into the dictionary tree; starts at a root's child
-	index_t parent = GV(parent_next);
-
-	LOG("compress: parent %u\r\n", parent);
-
-	parent_node = GV(dict, parent);
-
-	LOG("compress: parent node: l %u s %u c %u\r\n", parent_node.letter, parent_node.sibling, parent_node.child);
-
-	GV(sibling) = parent_node.child;
-
-	// Send a full node instead of only the index to avoid the need for
-	// task_add to channel the dictionary to self and thus avoid
-	// duplicating the memory for the dictionary (premature opt?).
-	// In summary: instead of self-channeling the whole array, we
-	// proxy only one element of the array.
-	//
-	// NOTE: source of inefficiency: we execute this on every step of traversal
-	// over the nodes in the tree, but really need this only for the last one.
-	GV(parent_node) = parent_node; //------->> BUG HERE??????
-	GV(parent) = parent;
-	GV(child) = parent_node.child;
-
-	GV(sample_count)++;
-
-	TRANSITION_TO(task_find_sibling);
-}
-
-void task_find_sibling()
-{
-	// TASK_PROLOGUE();
-
-	node_t *sibling_node;
-
-	LOG("find sibling: l %u s %u\r\n", GV(letter), GV(sibling));
-
-	if (GV(sibling) != NIL) {
-		// See comments in task_add_node about this split. It's a memory optimization.
-		int i = GV(sibling);
-		sibling_node = &GV(dict,i); 
-
-		LOG("find sibling: l %u, sn: l %u s %u c %u\r\n", GV(letter),
-				sibling_node->letter, sibling_node->sibling, sibling_node->child);
-
-		if (sibling_node->letter == GV(letter)) { // found
-			LOG("find sibling: found %u\r\n", GV(sibling));
-			GV(parent_next) = GV(sibling);
-			
-			TRANSITION_TO(task_letterize);
-		} else { // continue traversing the siblings
-			if(sibling_node->sibling != 0){
-				GV(sibling) = sibling_node->sibling;
-				TRANSITION_TO(task_find_sibling);
-			}
-		}
-
-	} 
-	LOG("find sibling: not found\r\n");
-
-	// Reset the node pointer into the dictionary tree to point to the
-	// root's child corresponding to the letter we are about to insert
-	// NOTE: The cast here relies on the fact that root's children are
-	// initialized in by inserting them in order of the letter value.
-	index_t starting_node_idx = (index_t)GV(letter);
-	GV(parent_next) = starting_node_idx;
-
-	// Add new node to dictionary tree, and, after that, append the
-	// compressed symbol to the result
-	//
-	LOG("find sibling: child %u\r\n", GV(child));
-	if (GV(child) == NIL) {
-		TRANSITION_TO(task_add_insert);
-	} else {
-		TRANSITION_TO(task_add_node); 
-	}
-	//  }
-}
-
-void task_add_node()
-{
-	// TASK_PROLOGUE();
-
-	node_t *sibling_node;
-
-	// This split is a memory optimization. It is to avoid having the
-	// channel from init task allocate memory for the whole dict, and
-	// instead to hold only the ones it actually modifies.
-	//
-	// NOTE: the init nodes do not come exclusively from the init task,
-	// because they might be later modified.
-	//if (sibling < NUM_LETTERS) {
-	int i = GV(sibling);
-	sibling_node = &GV(dict, i);
-
-	LOG("add node: s %u, sn: l %u s %u c %u\r\n", GV(sibling),
-			sibling_node->letter, sibling_node->sibling, sibling_node->child);
-
-	if (sibling_node->sibling != NIL) {
-		index_t next_sibling = sibling_node->sibling;
-		GV(sibling) = next_sibling;
-		TRANSITION_TO(task_add_node);
-
-	} else { // found last sibling in the list
-
-		LOG("add node: found last\r\n");
-
-		node_t sibling_node_obj = *sibling_node;
-		
-//		GV(sibling) = GV(sibling);
-		GV(sibling_node) = sibling_node_obj;
-
-		TRANSITION_TO(task_add_insert);
-	}
-}
-
-void task_add_insert()
-{
-	LOG("add insert: nodes %u\r\n", GV(node_count));
-
-	if (GV(node_count) == DICT_SIZE) { // wipe the table if full
-		while (1);
-	}
-	LOG("add insert: l %u p %u, pn l %u s %u c%u\r\n", GV(letter), GV(parent),
-			GV(parent_node).letter, GV(parent_node).sibling, GV(parent_node).child);
-
-	index_t child = GV(node_count);
-	node_t child_node = {
-		.letter = GV(letter),
-		.sibling = NIL,
-		.child = NIL,
-	};
-
-	if (GV(parent_node).child == NIL) { // the only child
-
-		LOG("add insert: only child\r\n");
-
-		node_t parent_node_obj = GV(parent_node);
-		parent_node_obj.child = child;
-
-		int i = GV(parent);
-		GV(dict, i) = parent_node_obj;
-
-	} else { // a sibling
-
-		index_t last_sibling = GV(sibling);
-
-		node_t last_sibling_node = GV(sibling_node);                   
-
-		LOG("add insert: sibling %u\r\n", last_sibling);
-
-		last_sibling_node.sibling = child;
-
-		GV(dict, last_sibling) = last_sibling_node;
-	}
-	GV(dict, child) = child_node;
-
-	GV(symbol) = GV(parent);
-
-	GV(node_count)++;
-
-	TRANSITION_TO(task_append_compressed);
-}
-
-void task_append_compressed()
-{
-	LOG("append comp: sym %u len %u \r\n", GV(symbol), GV(out_len));
-	int i = GV(out_len);
-	GV(compressed_data, i).letter = GV(symbol);
-
-	if (++GV(out_len) == BLOCK_SIZE) {
-		TRANSITION_TO(task_print);
-	} else {
-		TRANSITION_TO(task_sample);
-	}
-}
-
-void task_print()
+#ifdef SHOW_PROGRESS_ON_LED
+static void delay(uint32_t cycles)
 {
 	unsigned i;
-
-#if TIME == 0
-	BLOCK_PRINTF_BEGIN();
-	BLOCK_PRINTF("compressed block:\r\n");
-	for (i = 0; i < BLOCK_SIZE; ++i) {
-		index_t index = GV(compressed_data, i).letter;
-		BLOCK_PRINTF("%04x ", index);
-		if (i > 0 && (i + 1) % 8 == 0)
-			BLOCK_PRINTF("\r\n");
-	}
-	BLOCK_PRINTF("\r\n");
-	BLOCK_PRINTF("rate: samples/block: %u/%u\r\n", GV(sample_count), BLOCK_SIZE);
-	BLOCK_PRINTF_END();
-#endif
-	//TRANSITION_TO(task_sample); // restart app
-	TRANSITION_TO(task_done); // for now just do one block
+	for (i = 0; i < cycles / (1U << 15); ++i)
+		__delay_cycles(1U << 15);
 }
 
-void task_done()
+static void blink(unsigned count, uint32_t duration, unsigned leds)
 {
+	unsigned i;
+	for (i = 0; i < count; ++i) {
+		GPIO(PORT_LED_1, OUT) |= (leds & LED1) ? BIT(PIN_LED_1) : 0x0;
+		GPIO(PORT_LED_2, OUT) |= (leds & LED2) ? BIT(PIN_LED_2) : 0x0;
+		delay(duration / 2);
+		GPIO(PORT_LED_1, OUT) &= (leds & LED1) ? ~BIT(PIN_LED_1) : ~0x0;
+		GPIO(PORT_LED_2, OUT) &= (leds & LED2) ? ~BIT(PIN_LED_2) : ~0x0;
+		delay(duration / 2);
+	}
+}
+#endif
+
+static void print_hex_ascii(const uint8_t *m, unsigned len)
+{
+	int i, j;
+
+	for (i = 0; i < len; i += PRINT_HEX_ASCII_COLS) {
+		for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j)
+			printf("%02x ", m[i + j]);
+		for (; j < PRINT_HEX_ASCII_COLS; ++j)
+			printf("   ");
+		printf(" ");
+		for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j) {
+			char c = m[i + j];
+			if (!(32 <= c && c <= 127)) // not printable
+				c = '.';
+			printf("%c", c);
+		}
+		printf("\r\n");
+	}
+}
+
+void task_init()
+{
+	int i;
+	unsigned message_length = sizeof(PLAINTEXT) - 1; // skip the terminating null byte
+
+	LOG("init\r\n");
+	LOG("digit: %u\r\n", sizeof(digit_t));
+	LOG("unsigned: %u\r\n",sizeof(unsigned));
+
+#ifdef SHOW_COARSE_PROGRESS_ON_LED
+	blink(1, BLINK_DURATION_BOOT, LED1 | LED2);
+#endif
+
+	LOG("init: out modulus\r\n");
+
+	// TODO: consider passing pubkey as a structure type
+	for (i = 0; i < NUM_DIGITS; ++i) {
+		GV(modulus, i) = pubkey.n[i];
+	}
+
+	LOG("init: out exp\r\n");
+
+	GV(exponent) = pubkey.e;
+	GV(message_length) = message_length;
+	GV(block_offset) = 0;
+	GV(cyphertext_len) = 0;
+
+	LOG("init: done\r\n");
+
+	TRANSITION_TO(task_pad);
+}
+
+void task_pad()
+{
+	int i;
+
+#ifdef SHOW_COARSE_PROGRESS_ON_LED
+	GPIO(PORT_LED_1, OUT) &= ~BIT(PIN_LED_1);
+#endif
+
+	LOG("pad: len=%u offset=%u\r\n", GV(message_length), GV(block_offset));
+
+	if (GV(block_offset) >= GV(message_length)) {
+		LOG("pad: message done\r\n");
+		TRANSITION_TO(task_print_cyphertext);
+	}
+
+	LOG("process block: padded block at offset=%u: ", GV(block_offset));
+	for (i = 0; i < NUM_PAD_DIGITS; ++i)
+		LOG("%x ", PAD_DIGITS[i]);
+	LOG("'");
+	for (i = NUM_DIGITS - NUM_PAD_DIGITS - 1; i >= 0; --i)
+		LOG("%x ", PLAINTEXT[GV(block_offset) + i]);
+	LOG("\r\n");
+
+	digit_t zero = 0;
+	for (i = 0; i < NUM_DIGITS - NUM_PAD_DIGITS; ++i) {
+		GV(base, i) = (GV(block_offset) + i < GV(message_length)) ? PLAINTEXT[GV(block_offset) + i] : 0xFF;
+	}
+	for (i = NUM_DIGITS - NUM_PAD_DIGITS; i < NUM_DIGITS; ++i) {
+		GV(base, i) = 1;
+	}
+	GV(block, 0) = 1;
+	for (i = 1; i < NUM_DIGITS; ++i)
+		GV(block, i) = 0;
+
+	//GV(exponent_next) = GV(exponent);
+
+	GV(block_offset) += NUM_DIGITS - NUM_PAD_DIGITS;
+
+#ifdef SHOW_COARSE_PROGRESS_ON_LED
+	GPIO(PORT_LED_1, OUT) |= BIT(PIN_LED_1);
+#endif
+	TRANSITION_TO(task_exp);
+}
+
+void task_exp()
+{
+	LOG("exp: e=%x\r\n", GV(exponent));
+
+	// ASSERT: e > 0
+
+
+	if (GV(exponent) & 0x1) {
+		GV(exponent) >>= 1;
+		TRANSITION_TO(task_mult_block);
+	} else {
+		GV(exponent) >>= 1;
+		TRANSITION_TO(task_square_base);
+	}
+}
+
+// TODO: is this task strictly necessary? it only makes a call. Can this call
+// be rolled into task_exp?
+void task_mult_block()
+{
+	LOG("mult block\r\n");
+
+	// TODO: pass args to mult: message * base
+	GV(next_task) = TASK_REF(task_mult_block_get_result);
+	TRANSITION_TO(task_mult_mod);
+}
+
+void task_mult_block_get_result()
+{
+	int i;
+
+	LOG("mult block get result: block: ");
+	for (i = NUM_DIGITS - 1; i >= 0; --i) { // reverse for printing
+		GV(block, i) = GV(product, i);
+		LOG("%x ", GV(product, i));
+	}
+	LOG("\r\n");
+
+	// On last iteration we don't need to square base
+	if (GV(exponent) > 0) {
+
+		// TODO: current implementation restricts us to send only to the next instantiation
+		// of self, so for now, as a workaround, we proxy the value in every instantiation
+
+		TRANSITION_TO(task_square_base);
+
+	} else { // block is finished, save it
+		LOG("mult block get result: cyphertext len=%u\r\n", GV(cyphertext_len));
+
+		if (GV(cyphertext_len) + NUM_DIGITS <= CYPHERTEXT_SIZE) {
+
+			for (i = 0; i < NUM_DIGITS; ++i) { // reverse for printing
+				// TODO: we could save this read by rolling this loop into the
+				// above loop, by paying with an extra conditional in the
+				// above-loop.
+				GV(cyphertext, _global_cyphertext_len) = GV(product, i);
+				++GV(cyphertext_len);
+			}
+
+		} else {
+			printf("WARN: block dropped: cyphertext overlow [%u > %u]\r\n",
+					GV(cyphertext_len) + NUM_DIGITS, CYPHERTEXT_SIZE);
+			// carry on encoding, though
+		}
+
+		// TODO: implementation limitation: cannot multicast and send to self
+		// in the same macro
+
+		LOG("mult block get results: block done, cyphertext_len=%u\r\n", GV(cyphertext_len));
+		TRANSITION_TO(task_pad);
+	}
+
+}
+
+// TODO: is this task necessary? it seems to act as nothing but a proxy
+// TODO: is there opportunity for special zero-copy optimization here
+void task_square_base()
+{
+	LOG("square base\r\n");
+
+	GV(next_task) = TASK_REF(task_square_base_get_result);
+	TRANSITION_TO(task_mult_mod);
+}
+
+// TODO: is there opportunity for special zero-copy optimization here
+void task_square_base_get_result()
+{
+	int i;
+	digit_t b;
+
+	LOG("square base get result\r\n");
+
+	for (i = 0; i < NUM_DIGITS; ++i) {
+		LOG("suqare base get result: base[%u]=%x\r\n", i, GV(product, i));
+		GV(base, i) = GV(product, i);
+	}
+
+	TRANSITION_TO(task_exp);
+}
+
+void task_print_cyphertext()
+{
+	int i, j = 0;
+	digit_t c;
+	char line[PRINT_HEX_ASCII_COLS];
+
+	LOG("print cyphertext: len=%u\r\n", GV(cyphertext_len));
+
+	//ENERGY_GUARD_BEGIN();
+	//printf("Cyphertext:\r\n");
+	for (i = 0; i < GV(cyphertext_len); ++i) {
+		c = GV(cyphertext, i);
+#if TIME == 0
+		printf("%02x ", c);
+		line[j++] = c;
+		if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
+			printf(" ");
+			for (j = 0; j < PRINT_HEX_ASCII_COLS; ++j) {
+				c = line[j];
+				if (!(32 <= c && c <= 127)) // not printable
+					c = '.';
+				printf("%c", c);
+			}
+			j = 0;
+			printf("\r\n");
+		}
+#endif
+	}
+
+#ifdef SHOW_COARSE_PROGRESS_ON_LED
+	blink(1, BLINK_MESSAGE_DONE, LED2);
+#endif
 #if TIME > 0
 	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
 #endif
-#if COUNT > 0
-	PRINTF("Max write at once: %u\r\n", max_num_dirty_gv);
-	PRINTF("READ COUNT: %u\r\n",rcount);	
-	PRINTF("WRITE COUNT: %u\r\n",wcount);	
-	PRINTF("TRANS COUNT: %u\r\n",tcount);	
-#endif	
-	unsigned mem=0;
-	unsigned i;
-	PRINTF("Size of task %u: %u\r\n", 1, sizeof(TASK_SYM_NAME(task_init)));
-	mem+=sizeof(TASK_SYM_NAME(task_init))*12;
-
-	PRINTF("Size of channel %u: %u\r\n", 1, sizeof(GV(letter)));
-	mem+=sizeof(GV(letter));
-	PRINTF("Size of channel %u: %u\r\n", 2, sizeof(GV(letter_idx)));
-	mem+=sizeof(GV(letter_idx));
-	PRINTF("Size of channel %u: %u\r\n", 3, sizeof(GV(prev_sample)));
-	mem+=sizeof(GV(prev_sample));
-	PRINTF("Size of channel %u: %u\r\n", 4, sizeof(GV(out_len)));
-	mem+=sizeof(GV(out_len));
-	PRINTF("Size of channel %u: %u\r\n", 5, sizeof(GV(node_count)));
-	mem+=sizeof(GV(node_count));
-	PRINTF("Size of channel %u: %u\r\n", 6, sizeof(GV(dict)));
-	mem+=sizeof(GV(dict));
-	PRINTF("Size of channel %u: %u\r\n", 7, sizeof(GV(sample)));
-	mem+=sizeof(GV(sample));
-	PRINTF("Size of channel %u: %u\r\n", 8, sizeof(GV(sample_count)));
-	mem+=sizeof(GV(sample_count));
-	PRINTF("Size of channel %u: %u\r\n", 9, sizeof(GV(sibling)));
-	mem+=sizeof(GV(sibling));
-	PRINTF("Size of channel %u: %u\r\n", 11, sizeof(GV(child)));
-	mem+=sizeof(GV(child));
-	PRINTF("Size of channel %u: %u\r\n", 12, sizeof(GV(parent)));
-	mem+=sizeof(GV(parent));
-	PRINTF("Size of channel %u: %u\r\n", 13, sizeof(GV(parent_next)));
-	mem+=sizeof(GV(parent_next));
-	PRINTF("Size of channel %u: %u\r\n", 14, sizeof(GV(parent_node)));
-	mem+=sizeof(GV(parent_node));
-	PRINTF("Size of channel %u: %u\r\n", 15, sizeof(GV(compressed_data)));
-	mem+=sizeof(GV(compressed_data));
-	PRINTF("Size of channel %u: %u\r\n", 16, sizeof(GV(sibling_node)));
-	mem+=sizeof(GV(sibling_node));
-	PRINTF("Size of channel %u: %u\r\n", 17, sizeof(GV(symbol)));
-	mem+=sizeof(GV(symbol));
-#if SBUF > 0
-	PRINTF("Size of dirty_arr: %u\r\n", sizeof(dirty_arr));
-	mem+=sizeof(dirty_arr);
-	PRINTF("Size of num_arr: %u\r\n", sizeof(num_arr));
-	mem+=sizeof(num_arr);
-#endif
-#if GBUF > 0
-//	PRINTF("Size of data[i]: %u\r\n", sizeof(data));
-//	mem+=sizeof(data);
-//	PRINTF("Size of data_dest[i]: %u\r\n", sizeof(data_dest));
-//	mem+=sizeof(data_dest);
-//	PRINTF("Size of data_size[i]: %u\r\n", sizeof(data_size));
-//	mem+=sizeof(data_size);
-#else
-	PRINTF("Size of dirty_gvs: %u\r\n", sizeof(dirty_gv));
-	mem+=sizeof(dirty_gv);
-	PRINTF("Size of num_dirty_gvs: %u\r\n", sizeof(num_dirty_gv));
-	mem+=sizeof(num_dirty_gv);
-#endif
-
-	PRINTF("Total: %u\r\n", mem);
-	// TRANSITION_TO(task_done);
 //	TRANSITION_TO(task_init);
+}
+
+// TODO: this task also looks like a proxy: is it avoidable?
+void task_mult_mod()
+{
+	LOG("mult mod\r\n");
+
+	GV(digit) = 0;
+	GV(carry) = 0;
+
+	TRANSITION_TO(task_mult);
+}
+
+void task_mult()
+{
+	int i;
+	digit_t a, b, c;
+	digit_t dp, p;
+
+#ifdef SHOW_PROGRESS_ON_LED
+	blink(1, BLINK_DURATION_TASK / 4, LED1);
+#endif
+
+	LOG("mult: digit=%u carry=%x\r\n", GV(digit), GV(carry));
+
+	p = GV(carry);
+	c = 0;
+	for (i = 0; i < NUM_DIGITS; ++i) {
+		if (GV(digit) - i >= 0 && GV(digit) - i < NUM_DIGITS) {
+			a = GV(base, _global_digit-i);
+			b = GV(block, i);
+			dp = a * b;
+
+			c += dp >> DIGIT_BITS;
+			p += dp & DIGIT_MASK;
+
+			LOG("mult: i=%u a=%x b=%x p=%x\r\n", i, a, b, p);
+		}
+	}
+
+	c += p >> DIGIT_BITS;
+	p &= DIGIT_MASK;
+
+	LOG("mult: c=%x p=%x\r\n", c, p);
+	GV(product, _global_digit) = p;
+	GV(print_which) = 0;
+	GV(digit)++;
+
+	if (GV(digit) < NUM_DIGITS * 2) {
+		GV(carry) = c;
+		TRANSITION_TO(task_mult);
+	} else {
+		GV(next_task_print) = TASK_REF(task_reduce_digits);
+		TRANSITION_TO(task_print_product);
+	}
+}
+
+void task_reduce_digits()
+{
+	int d;
+
+	LOG("reduce: digits\r\n");
+
+	// Start reduction loop at most significant non-zero digit
+	d = 2 * NUM_DIGITS;
+	do {
+		d--;
+		LOG("reduce digits: p[%u]=%x\r\n", d, GV(product, d));
+	} while (GV(product, d) == 0 && d > 0);
+
+	if (GV(product, d) == 0) {
+		LOG("reduce: digits: all digits of message are zero\r\n");
+		TRANSITION_TO(task_init);
+	}
+	LOG("reduce: digits: d = %u\r\n", d);
+
+	GV(reduce) = d;
+
+	TRANSITION_TO(task_reduce_normalizable);
+}
+
+void task_reduce_normalizable()
+{
+	int i;
+	unsigned m, n, d, offset;
+	bool normalizable = true;
+
+	LOG("reduce: normalizable\r\n");
+
+	// Variables:
+	//   m: message
+	//   n: modulus
+	//   b: digit base (2**8)
+	//   l: number of digits in the product (2 * NUM_DIGITS)
+	//   k: number of digits in the modulus (NUM_DIGITS)
+	//
+	// if (m > n b^(l-k)
+	//     m = m - n b^(l-k)
+	//
+	// NOTE: It's temptimg to do the subtraction opportunistically, and if
+	// the result is negative, then the condition must have been false.
+	// However, we can't do that because under this approach, we must
+	// write to the output channel zero digits for digits that turn
+	// out to be equal, but if a later digit pair is such that condition
+	// is false (p < m), then those rights are invalid, but we have no
+	// good way of exluding them from being picked up by the later
+	// task. One possiblity is to transmit a flag to that task that
+	// tells it whether to include our output channel into its input sync
+	// statement. However, this seems less elegant than splitting the
+	// normalization into two tasks: the condition and the subtraction.
+	//
+	// Multiplication by a power of radix (b) is a shift, so when we do the
+	// comparison/subtraction of the digits, we offset the index into the
+	// product digits by (l-k) = NUM_DIGITS.
+
+	d = *READ(GV(reduce));
+
+	GV(offset) = GV(reduce) + 1 - NUM_DIGITS; // TODO: can this go below zero
+	LOG("reduce: normalizable: d=%u offset=%u\r\n", GV(reduce), GV(offset));
+
+	for (i = GV(reduce); i >= 0; --i) {
+
+		LOG("normalizable: m[%u]=%x n[%u]=%x\r\n", i, GV(product, i), i - offset, GV(modulus, i-offset));
+
+		if (GV(product, i) > GV(modulus, i-offset)) {
+			break;
+		} else if (GV(product, i) < GV(modulus, i-offset)) {
+			normalizable = false;
+			break;
+		}
+	}
+
+	if (!normalizable && GV(reduce) == NUM_DIGITS - 1) {
+		LOG("reduce: normalizable: reduction done: message < modulus\r\n");
+
+		// TODO: is this copy avoidable? a 'mult mod done' task doesn't help
+		// because we need to ship the data to it.
+		transition_to(GV(next_task));
+	}
+
+	LOG("normalizable: %u\r\n", normalizable);
+
+	if (normalizable) {
+		TRANSITION_TO(task_reduce_normalize);
+	} else {
+		TRANSITION_TO(task_reduce_n_divisor);
+	}
+}
+
+// TODO: consider decomposing into subtasks
+void task_reduce_normalize()
+{
+	digit_t m, n, d, s;
+	unsigned borrow;
+
+	LOG("normalize\r\n");
+
+	int i;
+	// To call the print task, we need to proxy the values we don't touch
+	GV(print_which) = 0;
+
+	borrow = 0;
+	for (i = 0; i < NUM_DIGITS; ++i) {
+		m = GV(product, i + _global_offset);
+		n = GV(modulus, i);
+
+		s = n + borrow;
+		if (m < s) {
+			m += 1 << DIGIT_BITS;
+			borrow = 1;
+		} else {
+			borrow = 0;
+		}
+		d = m - s;
+
+		LOG("normalize: m[%u]=%x n[%u]=%x b=%u d=%x\r\n",
+				i + GV(offset), m, i, n, borrow, d);
+
+		GV(product, i + _global_offset) = d;
+	}
+
+	// To call the print task, we need to proxy the values we don't touch
+
+	if (GV(offset) > 0) { // l-1 > k-1 (loop bounds), where offset=l-k, where l=|m|,k=|n|
+		GV(next_task_print) = TASK_REF(task_reduce_n_divisor);
+	} else {
+		LOG("reduce: normalize: reduction done: no digits to reduce\r\n");
+		// TODO: is this copy avoidable?
+		GV(next_task_print) = GV(next_task);
+	}
+	TRANSITION_TO(task_print_product);
+}
+
+void task_reduce_n_divisor()
+{
+
+#ifdef SHOW_PROGRESS_ON_LED
+	blink(1, SEC_TO_CYCLES, LED2);
+#endif
+
+	LOG("reduce: n divisor\r\n");
+
+	// Divisor, derived from modulus, for refining quotient guess into exact value
+	GV(n_div) = ( GV(modulus, NUM_DIGITS - 1)<< DIGIT_BITS) + GV(modulus, NUM_DIGITS -2);
+
+	LOG("reduce: n divisor: n[1]=%x n[0]=%x n_div=%x\r\n", GV(modulus, NUM_DIGITS - 1), GV(modulus, NUM_DIGITS -2), GV(n_div));
+
+	TRANSITION_TO(task_reduce_quotient);
+}
+
+void task_reduce_quotient()
+{
+	digit_t m_n, q;
+	uint32_t qn, n_q; // must hold at least 3 digits
+
+#ifdef SHOW_PROGRESS_ON_LED
+	blink(1, BLINK_DURATION_TASK, LED2);
+#endif
+
+	LOG("reduce: quotient: d=%u\r\n", GV(reduce));
+
+	// NOTE: we asserted that NUM_DIGITS >= 2, so p[d-2] is safe
+
+	LOG("reduce: quotient: m_n=%x m[d]=%x\r\n", GV(modulus, NUM_DIGITS - 1), GV(product, _global_reduce));
+
+	// Choose an initial guess for quotient
+	if (GV(product, _global_reduce) == GV(modulus, NUM_DIGITS - 1)) {
+		GV(quotient) = (1 << DIGIT_BITS) - 1;
+	} else {
+		GV(quotient) = ((GV(product, _global_reduce) << DIGIT_BITS) + GV(product, _global_reduce - 1)) / GV(modulus, NUM_DIGITS - 1);
+	}
+
+	LOG("reduce: quotient: q0=%x\r\n", q);
+
+	// Refine quotient guess
+
+	// NOTE: An alternative to composing the digits into one variable, is to
+	// have a loop that does the comparison digit by digit to implement the
+	// condition of the while loop below.
+	n_q = ((uint32_t)GV(product, _global_reduce) << (2 * DIGIT_BITS)) + (GV(product, _global_reduce - 1) << DIGIT_BITS) + GV(product, _global_reduce - 2);
+
+	LOG("reduce: quotient: m[d]=%x m[d-1]=%x m[d-2]=%x n_q=%x%x\r\n",
+			GV(product, _global_reduce), GV(product, _global_reduce - 1), GV(product, _global_reduce - 2), (uint16_t)((n_q >> 16) & 0xffff), (uint16_t)(n_q & 0xffff));
+
+	LOG("reduce: quotient: n_div=%x q0=%x\r\n", GV(n_div), GV(quotient));
+
+	GV(quotient)++;
+	do {
+		GV(quotient)--;
+		qn = mult16(GV(n_div), GV(quotient));
+		//qn = GV(n_div) * GV(quotient);
+		LOG("QN1 = %x\r\n", (uint16_t)((qn >> 16) & 0xffff));
+		LOG("QN0 = %x\r\n", (uint16_t)(qn & 0xffff));
+		LOG("reduce: quotient: q=%x qn=%x%x\r\n", GV(quotient),
+				(uint16_t)((qn >> 16) & 0xffff), (uint16_t)(qn & 0xffff));
+	} while (qn > n_q);
+
+	// This is still not the final quotient, it may be off by one,
+	// which we determine and fix in the 'compare' and 'add' steps.
+	LOG("reduce: quotient: q=%x\r\n", GV(quotient));
+
+	GV(reduce)--;
+
+	TRANSITION_TO(task_reduce_multiply);
+}
+
+// NOTE: this is multiplication by one digit, hence not re-using mult task
+void task_reduce_multiply()
+{
+	int i;
+	digit_t m, n;
+	unsigned c, offset;
+
+#ifdef SHOW_PROGRESS_ON_LED
+	blink(1, BLINK_DURATION_TASK, LED2);
+#endif
+
+	LOG("reduce: multiply: d=%x q=%x\r\n", GV(reduce) + 1, GV(quotient));
+
+	// As part of this task, we also perform the left-shifting of the q*m
+	// product by radix^(digit-NUM_DIGITS), where NUM_DIGITS is the number
+	// of digits in the modulus. We implement this by fetching the digits
+	// of number being reduced at that offset.
+	offset = GV(reduce) + 1 - NUM_DIGITS;
+	LOG("reduce: multiply: offset=%u\r\n", offset);
+
+	// For calling the print task we need to proxy to it values that
+	// we do not modify
+	for (i = 0; i < offset; ++i) {
+		GV(product2, i) = 0;
+	}
+
+	// TODO: could convert the loop into a self-edge
+	c = 0;
+	for (i = offset; i < 2 * NUM_DIGITS; ++i) {
+
+		// This condition creates the left-shifted zeros.
+		// TODO: consider adding number of digits to go along with the 'product' field,
+		// then we would not have to zero out the MSDs
+		m = c;
+		if (i < offset + NUM_DIGITS) {
+			n = GV(modulus, i - offset);
+			//MC_IN_CH(ch_modulus, task_init, task_reduce_multiply));
+			m += GV(quotient) * n;
+		} else {
+			n = 0;
+			// TODO: could break out of the loop  in this case (after WRITE)
+		}
+
+		LOG("reduce: multiply: n[%u]=%x q=%x c=%x m[%u]=%x\r\n",
+				i - offset, n, GV(quotient), c, i, m);
+
+		c = m >> DIGIT_BITS;
+		m &= DIGIT_MASK;
+
+		GV(product2, i) = m;
+
+	}
+	GV(print_which) = 1;
+	GV(next_task_print) = TASK_REF(task_reduce_compare);
+	TRANSITION_TO(task_print_product);
+}
+
+void task_reduce_compare()
+{
+	int i;
+	char relation = '=';
+
+#ifdef SHOW_PROGRESS_ON_LED
+	blink(1, BLINK_DURATION_TASK, LED2);
+#endif
+
+	LOG("reduce: compare\r\n");
+
+	// TODO: could transform this loop into a self-edge
+	// TODO: this loop might not have to go down to zero, but to NUM_DIGITS
+	// TODO: consider adding number of digits to go along with the 'product' field
+	for (i = NUM_DIGITS * 2 - 1; i >= 0; --i) {
+		LOG("reduce: compare: m[%u]=%x qn[%u]=%x\r\n", i, GV(product, i), i, GV(product2, i));
+
+		if (GV(product, i) > GV(product2, i)) {
+			relation = '>';
+			break;
+		} else if (GV(product, i) < GV(product2, i)) {
+			relation = '<';
+			break;
+		}
+	}
+
+	LOG("reduce: compare: relation %c\r\n", relation);
+
+	if (relation == '<') {
+		TRANSITION_TO(task_reduce_add);
+	} else {
+		TRANSITION_TO(task_reduce_subtract);
+	}
+}
+
+// TODO: this addition and subtraction can probably be collapsed
+// into one loop that always subtracts the digits, but, conditionally, also
+// adds depending on the result from the 'compare' task. For now,
+// we keep them separate for clarity.
+
+void task_reduce_add()
+{
+	int i, j;
+	digit_t m, n, c;
+	unsigned offset;
+
+#ifdef SHOW_PROGRESS_ON_LED
+	blink(1, BLINK_DURATION_TASK, LED2);
+#endif
+	// Part of this task is to shift modulus by radix^(digit - NUM_DIGITS)
+	offset = GV(reduce) + 1 - NUM_DIGITS;
+
+	LOG("reduce: add: d=%u offset=%u\r\n", GV(reduce) + 1, offset);
+
+	// For calling the print task we need to proxy to it values that
+	// we do not modify
+
+	// TODO: coult transform this loop into a self-edge
+	c = 0;
+	for (i = offset; i < 2 * NUM_DIGITS; ++i) {
+		m = GV(product, i);
+
+		// Shifted index of the modulus digit
+		j = i - offset;
+
+		if (i < offset + NUM_DIGITS) {
+			n = GV(modulus, j);
+		} else {
+			n = 0;
+			j = 0; // a bit ugly, we want 'nan', but ok, since for output only
+			// TODO: could break out of the loop in this case (after WRITE)
+		}
+
+		GV(product, i) = c + m + n;
+
+		LOG("reduce: add: m[%u]=%x n[%u]=%x c=%x r=%x\r\n", i, m, j, n, c, GV(product, i));
+
+		c = GV(product, i) >> DIGIT_BITS;
+		GV(product, i) &= DIGIT_MASK;
+	}
+	GV(print_which) = 0;
+	GV(next_task_print) = TASK_REF(task_reduce_subtract);
+	TRANSITION_TO(task_print_product);
+}
+
+// TODO: re-use task_reduce_normalize?
+void task_reduce_subtract()
+{
+	LOG("subtract entered!!");
+	int i;
+	digit_t m, s, qn;
+	unsigned borrow, offset;
+
+#ifdef SHOW_PROGRESS_ON_LED
+	blink(1, BLINK_DURATION_TASK, LED2);
+#endif
+
+	// The qn product had been shifted by this offset, no need to subtract the zeros
+	offset = GV(reduce) + 1 - NUM_DIGITS;
+
+	LOG("reduce: subtract: d=%u offset=%u\r\n", GV(reduce) + 1, offset);
+
+	// For calling the print task we need to proxy to it values that
+	// we do not modify
+
+	// TODO: could transform this loop into a self-edge
+	borrow = 0;
+	for (i = 0; i < 2 * NUM_DIGITS; ++i) {
+		m = GV(product, i);
+
+		// For calling the print task we need to proxy to it values that we do not modify
+		if (i >= offset) {
+			qn = GV(product2, i);
+
+			s = qn + borrow;
+			if (m < s) {
+				m += 1 << DIGIT_BITS;
+				borrow = 1;
+			} else {
+				borrow = 0;
+			}
+			GV(product, i) = m - s;
+
+			LOG("reduce: subtract: m[%u]=%x qn[%u]=%x b=%u r=%x\r\n",
+					i, m, i, qn, borrow, GV(product, i));
+
+		}
+	}
+	GV(print_which) = 0;
+
+	if (GV(reduce) + 1 > NUM_DIGITS) {
+		GV(next_task_print) = TASK_REF(task_reduce_quotient);
+	} else { // reduction finished: exit from the reduce hypertask (after print)
+		LOG("reduce: subtract: reduction done\r\n");
+
+		// TODO: Is it ok to get the next task directly from call channel?
+		//       If not, all we have to do is have reduce task proxy it.
+		//       Also, do we need a dedicated epilogue task?
+		GV(next_task_print) = GV(next_task);
+	}
+	TRANSITION_TO(task_print_product);
+}
+
+// TODO: eliminate from control graph when not verbose
+void task_print_product()
+{
+	const task_t* next_task;
+#ifdef VERBOSE
+	int i;
+
+	LOG("print: P=");
+	for (i = (NUM_DIGITS * 2) - 1; i >= 0; --i) {
+		if(GV(print_which)){
+			LOG("%x ", GV(product2, i));
+		}
+		else{
+			LOG("%x ", GV(product, i));
+		}
+	}
+	LOG("\r\n");
+#endif
+	transition_to(GV(next_task_print));
 }
 
 	ENTRY_TASK(task_init)

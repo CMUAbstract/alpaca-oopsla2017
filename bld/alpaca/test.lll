@@ -1,0 +1,26 @@
+
+  %5 = load i16, i16* %i, align 2, !dbg !298
+  %6 = load i16, i16* @_global_index_bak, align 2, !dbg !300
+  %mul = mul i16 %6, 32, !dbg !301
+  %add = add i16 %5, %mul, !dbg !302
+  %arrayidx = getelementptr inbounds [512 x i16], [512 x i16]* %testArr, i16 0, i16 %add, !dbg !303
+  %7 = load i16, i16* %arrayidx, align 2, !dbg !303
+  %tobool = icmp ne i16 %7, 0, !dbg !303
+  br i1 %tobool, label %if.end, label %if.then, !dbg !304
+
+if.then:                                          ; preds = %for.body
+  %8 = load i16, i16* %i, align 2, !dbg !305
+  %9 = load i16, i16* @_global_index_bak, align 2, !dbg !305
+  %mul2 = mul i16 %9, 32, !dbg !305
+  %add3 = add i16 %8, %mul2, !dbg !305
+  %arrayidx4 = getelementptr inbounds [256 x i16], [256 x i16]* @_global_filter_bak, i16 0, i16 %add3, !dbg !305
+  %10 = load i16, i16* %arrayidx4, align 2, !dbg !305
+  %11 = load i16, i16* %i, align 2, !dbg !306
+  %12 = load i16, i16* @_global_index_bak, align 2, !dbg !306
+  %mul5 = mul i16 %12, 32, !dbg !306
+  %add6 = add i16 %11, %mul5, !dbg !306
+  %arrayidx7 = getelementptr inbounds [256 x i16], [256 x i16]* @_global_filter_bak, i16 0, i16 %add6, !dbg !306
+  store i16 %10, i16* %arrayidx7, align 2, !dbg !307
+  br label %if.end, !dbg !306
+
+if.end:                                           ; preds = %if.then, %for.body

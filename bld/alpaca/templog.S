@@ -62,6 +62,7 @@ init:                                   ; @init
 	bis.w	#2, r12
 	mov.w	r12, &0x03C0
 	call	#init_hw
+	call	#mspconsole_init
 	mov.b	&0x0204, r12
 	bis.w	#2, r12
 	mov.b	r12, r13
@@ -74,10 +75,13 @@ init:                                   ; @init
 	bis.w	#1, r12
 	mov.b	r12, r13
 	mov.b	r13, &0x0204
-	call	#mspconsole_init
 	;APP
 	eint { nop
 	;NO_APP
+	mov.b	&0x0202, r12
+	bis.w	#1, r12
+	mov.b	r12, r13
+	mov.b	r13, &0x0202
 	pop.w	r4
 	ret
 .Lfunc_end1:
@@ -90,825 +94,2325 @@ task_init:                              ; @task_init
 ; BB#0:                                 ; %entry
 	push.w	r4
 	mov.w	r1, r4
-	mov.w	#0, &_global_parent_next
-	mov.w	#0, &_global_out_len
-	mov.w	#0, &_global_letter
-	mov.w	#0, &_global_prev_sample
-	mov.w	#0, &_global_letter_idx
-	mov.w	#1, &_global_sample_count
-	mov.w	#_task_task_init_dict, r15
+	sub.w	#20, r1
+	mov.w	#11, -4(r4)
+	mov.w	r1, r12
+	mov.w	#.L.str, 0(r12)
+	call	#printf
+	mov.w	r1, r12
+	mov.w	#2, 2(r12)
+	mov.w	#.L.str.1, 0(r12)
+	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	call	#printf
+	mov.w	r1, r12
+	mov.w	#2, 2(r12)
+	mov.w	#.L.str.2, 0(r12)
+	mov.w	r15, -8(r4)             ; 2-byte Folded Spill
+	call	#printf
+	mov.w	r1, r12
+	mov.w	#.L.str.3, 0(r12)
+	mov.w	r15, -10(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	#0, -2(r4)
+	mov.w	r15, -12(r4)            ; 2-byte Folded Spill
+	jmp	.LBB2_1
+.LBB2_1:                                ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#16, r12
+	jge	.LBB2_4
+	jmp	.LBB2_2
+.LBB2_2:                                ; %for.body
+                                        ;   in Loop: Header=BB2_1 Depth=1
+	mov.w	-2(r4), r12
+	mov.b	pubkey(r12), r13
+	rla.w	r12
+	mov.w	r13, _global_modulus(r12)
+	jmp	.LBB2_3
+.LBB2_3:                                ; %for.inc
+                                        ;   in Loop: Header=BB2_1 Depth=1
+	mov.w	-2(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -2(r4)
+	jmp	.LBB2_1
+.LBB2_4:                                ; %for.end
+	mov.w	r1, r12
+	mov.w	#.L.str.4, 0(r12)
+	call	#printf
+	mov.w	&pubkey+16, r12
+	mov.w	r12, &_global_exponent
+	mov.w	-4(r4), r12
+	mov.w	r12, &_global_message_length
+	mov.w	#0, &_global_block_offset
+	mov.w	#0, &_global_cyphertext_len
+	mov.w	r1, r12
+	mov.w	#.L.str.5, 0(r12)
+	mov.w	r15, -14(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	#_task_task_pad, r12
+	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
+	mov.w	r12, r15
 	call	#transition_to
+	add.w	#20, r1
 	pop.w	r4
 	ret
 .Lfunc_end2:
 	.size	task_init, .Lfunc_end2-task_init
 
-	.globl	task_init_dict
+	.globl	task_pad
 	.align	2
-	.type	task_init_dict,@function
-task_init_dict:                         ; @task_init_dict
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#10, r1
-	mov.w	&_global_letter, r12
-	mov.w	r12, -2(r4)
-	mov.w	r12, -8(r4)
-	mov.w	#0, -6(r4)
-	mov.w	#0, -4(r4)
-	mov.w	-2(r4), r12
-	mov.w	r12, -10(r4)
-	mov.w	#6, r14
-	mov.w	r12, r15
-	call	#__mulhi3hw_noint
-	mov.w	-4(r4), r12
-	mov.w	r12, _global_dict+4(r15)
-	mov.w	-6(r4), r12
-	mov.w	r12, _global_dict+2(r15)
-	mov.w	-8(r4), r12
-	mov.w	r12, _global_dict(r15)
-	mov.w	-2(r4), r12
-	add.w	#1, r12
-	mov.w	r12, -2(r4)
-	cmp.w	#256, r12
-	jhs	.LBB3_2
-	jmp	.LBB3_1
-.LBB3_1:                                ; %if.then
-	mov.w	#_global_letter, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_init_dict, r15
-	call	#transition_to
-	jmp	.LBB3_3
-.LBB3_2:                                ; %if.else
-	mov.w	#256, &_global_node_count
-	mov.w	#_global_letter, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_sample, r15
-	call	#transition_to
-	jmp	.LBB3_3
-.LBB3_3:                                ; %if.end
-	add.w	#10, r1
-	pop.w	r4
-	ret
-.Lfunc_end3:
-	.size	task_init_dict, .Lfunc_end3-task_init_dict
-
-	.globl	task_sample
-	.align	2
-	.type	task_sample,@function
-task_sample:                            ; @task_sample
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#4, r1
-	mov.w	&_global_letter_idx, r12
-	mov.w	r12, -2(r4)
-	add.w	#1, r12
-	mov.w	r12, -4(r4)
-	cmp.w	#2, r12
-	jne	.LBB4_2
-	jmp	.LBB4_1
-.LBB4_1:                                ; %if.then
-	mov.w	#0, -4(r4)
-	jmp	.LBB4_2
-.LBB4_2:                                ; %if.end
-	mov.w	-2(r4), r12
-	cmp.w	#0, r12
-	jne	.LBB4_4
-	jmp	.LBB4_3
-.LBB4_3:                                ; %if.then.2
-	mov.w	-4(r4), r12
-	mov.w	r12, -2(r4)
-	mov.w	#_global_letter_idx, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_measure_temp, r15
-	call	#transition_to
-	jmp	.LBB4_5
-.LBB4_4:                                ; %if.else
-	mov.w	-4(r4), r12
-	mov.w	r12, -2(r4)
-	mov.w	#_global_letter_idx, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_letterize, r15
-	call	#transition_to
-	jmp	.LBB4_5
-.LBB4_5:                                ; %if.end.3
-	add.w	#4, r1
-	pop.w	r4
-	ret
-.Lfunc_end4:
-	.size	task_sample, .Lfunc_end4-task_sample
-
-	.globl	task_measure_temp
-	.align	2
-	.type	task_measure_temp,@function
-task_measure_temp:                      ; @task_measure_temp
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#8, r1
-	mov.w	#_global_prev_sample, r14
-	mov.w	&_global_prev_sample, r12
-	mov.w	r12, -2(r4)
-	mov.w	r12, -4(r4)
-	mov.w	r12, r15
-	mov.w	r14, -8(r4)             ; 2-byte Folded Spill
-	call	#acquire_sample
-	mov.w	r15, -6(r4)
-	mov.w	r15, -4(r4)
-	mov.w	r15, -2(r4)
-	mov.w	-6(r4), r12
-	mov.w	r12, &_global_sample
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	mov.w	-8(r4), r14             ; 2-byte Folded Reload
-	call	#write_to_gbuf
-	mov.w	#_task_task_letterize, r15
-	call	#transition_to
-	add.w	#8, r1
-	pop.w	r4
-	ret
-.Lfunc_end5:
-	.size	task_measure_temp, .Lfunc_end5-task_measure_temp
-
-	.globl	task_letterize
-	.align	2
-	.type	task_letterize,@function
-task_letterize:                         ; @task_letterize
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#16, r1
-	mov.w	&_global_letter_idx, r12
-	mov.w	r12, -2(r4)
-	cmp.w	#0, r12
-	jne	.LBB6_2
-	jmp	.LBB6_1
-.LBB6_1:                                ; %if.then
-	mov.w	#2, -2(r4)
-	jmp	.LBB6_3
-.LBB6_2:                                ; %if.else
-	mov.w	-2(r4), r12
-	add.w	#-1, r12
-	mov.w	r12, -2(r4)
-	jmp	.LBB6_3
-.LBB6_3:                                ; %if.end
-	;DEBUG_VALUE: task_letterize:letter_shift <- [FP+-4]
-	mov.w	-2(r4), r12
-	rla.w	r12
-	rla.w	r12
-	rla.w	r12
-	mov.w	r12, -4(r4)
-	;DEBUG_VALUE: task_letterize:letter <- [FP+-6]
-	mov.w	&_global_sample, r12
-	mov.b	-4(r4), r13
-	mov.w	#255, r14
-	cmp.b	#0, r13
-	mov.b	r13, r15
-	mov.w	r12, -8(r4)             ; 2-byte Folded Spill
-	mov.b	r13, -9(r4)             ; 1-byte Folded Spill
-	mov.w	r14, -12(r4)            ; 2-byte Folded Spill
-	mov.b	r15, -13(r4)            ; 1-byte Folded Spill
-	jeq	.LBB6_5
-.LBB6_4:                                ; %if.end
-                                        ; =>This Inner Loop Header: Depth=1
-	mov.b	-13(r4), r12            ; 1-byte Folded Reload
-	mov.w	-12(r4), r13            ; 2-byte Folded Reload
-	rla.w	r13
-	sub.b	#1, r12
-	mov.w	r13, -12(r4)            ; 2-byte Folded Spill
-	mov.b	r12, -13(r4)            ; 1-byte Folded Spill
-	jne	.LBB6_4
-.LBB6_5:                                ; %if.end
-	mov.w	-12(r4), r12            ; 2-byte Folded Reload
-	mov.w	-8(r4), r13             ; 2-byte Folded Reload
-	and.w	r12, r13
-	mov.b	-9(r4), r14             ; 1-byte Folded Reload
-	cmp.b	#0, r14
-	mov.b	r14, -14(r4)            ; 1-byte Folded Spill
-	mov.w	r13, -16(r4)            ; 2-byte Folded Spill
-	jeq	.LBB6_7
-.LBB6_6:                                ; %if.end
-                                        ; =>This Inner Loop Header: Depth=1
-	mov.b	-14(r4), r12            ; 1-byte Folded Reload
-	mov.w	-16(r4), r13            ; 2-byte Folded Reload
-	clrc
-	rrc.w	r13
-	sub.b	#1, r12
-	mov.w	r13, -16(r4)            ; 2-byte Folded Spill
-	mov.b	r12, -14(r4)            ; 1-byte Folded Spill
-	jne	.LBB6_6
-.LBB6_7:                                ; %if.end
-	mov.w	-16(r4), r12            ; 2-byte Folded Reload
-	mov.w	r12, -6(r4)
-	mov.w	r12, &_global_letter
-	mov.w	#_task_task_compress, r15
-	call	#transition_to
-	add.w	#16, r1
-	pop.w	r4
-	ret
-.Lfunc_end6:
-	.size	task_letterize, .Lfunc_end6-task_letterize
-
-	.globl	task_compress
-	.align	2
-	.type	task_compress,@function
-task_compress:                          ; @task_compress
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#12, r1
-	mov.w	#_global_sample_count, r14
-	mov.w	&_global_sample_count, r12
-	mov.w	r12, -2(r4)
-	mov.w	&_global_parent_next, r12
-	mov.w	r12, -10(r4)
-	mov.w	#6, r13
-	mov.w	r12, r15
-	mov.w	r14, -12(r4)            ; 2-byte Folded Spill
-	mov.w	r13, r14
-	call	#__mulhi3hw_noint
-	mov.w	_global_dict+4(r15), r12
-	mov.w	r12, -4(r4)
-	mov.w	_global_dict+2(r15), r12
-	mov.w	r12, -6(r4)
-	mov.w	_global_dict(r15), r12
-	mov.w	r12, -8(r4)
-	mov.w	-4(r4), r12
-	mov.w	r12, &_global_sibling
-	mov.w	-4(r4), r12
-	mov.w	r12, &_global_parent_node+4
-	mov.w	-6(r4), r12
-	mov.w	r12, &_global_parent_node+2
-	mov.w	-8(r4), r12
-	mov.w	r12, &_global_parent_node
-	mov.w	-10(r4), r12
-	mov.w	r12, &_global_parent
-	mov.w	-4(r4), r12
-	mov.w	r12, &_global_child
-	mov.w	-2(r4), r12
-	add.w	#1, r12
-	mov.w	r12, -2(r4)
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	mov.w	-12(r4), r14            ; 2-byte Folded Reload
-	call	#write_to_gbuf
-	mov.w	#_task_task_find_sibling, r15
-	call	#transition_to
-	add.w	#12, r1
-	pop.w	r4
-	ret
-.Lfunc_end7:
-	.size	task_compress, .Lfunc_end7-task_compress
-
-	.globl	task_find_sibling
-	.align	2
-	.type	task_find_sibling,@function
-task_find_sibling:                      ; @task_find_sibling
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#8, r1
-	mov.w	&_global_sibling, r12
-	mov.w	r12, -2(r4)
-	cmp.w	#0, r12
-	jeq	.LBB8_7
-	jmp	.LBB8_1
-.LBB8_1:                                ; %if.then
-	;DEBUG_VALUE: i <- [FP+-6]
-	mov.w	-2(r4), r12
-	mov.w	r12, -6(r4)
-	mov.w	#6, r14
-	mov.w	r12, r15
-	call	#__mulhi3hw_noint
-	mov.w	r15, r12
-	add.w	#_global_dict, r12
-	mov.w	r12, -4(r4)
-	mov.w	_global_dict(r15), r12
-	mov.w	&_global_letter, r14
-	cmp.w	r14, r12
-	jne	.LBB8_3
-	jmp	.LBB8_2
-.LBB8_2:                                ; %if.then.2
-	mov.w	-2(r4), r12
-	mov.w	r12, &_global_parent_next
-	mov.w	#_global_sibling, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_letterize, r15
-	call	#transition_to
-	jmp	.LBB8_6
-.LBB8_3:                                ; %if.else
-	mov.w	-4(r4), r12
-	mov.w	2(r12), r12
-	cmp.w	#0, r12
-	jeq	.LBB8_5
-	jmp	.LBB8_4
-.LBB8_4:                                ; %if.then.4
-	mov.w	-4(r4), r12
-	mov.w	2(r12), r12
-	mov.w	r12, -2(r4)
-	mov.w	#_global_sibling, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_find_sibling, r15
-	call	#transition_to
-	jmp	.LBB8_5
-.LBB8_5:                                ; %if.end
-	jmp	.LBB8_6
-.LBB8_6:                                ; %if.end.6
-	jmp	.LBB8_7
-.LBB8_7:                                ; %if.end.7
-	;DEBUG_VALUE: task_find_sibling:starting_node_idx <- [FP+-8]
-	mov.w	&_global_letter, r12
-	mov.w	r12, -8(r4)
-	mov.w	r12, &_global_parent_next
-	mov.w	&_global_child, r12
-	cmp.w	#0, r12
-	jne	.LBB8_9
-	jmp	.LBB8_8
-.LBB8_8:                                ; %if.then.9
-	mov.w	#_global_sibling, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_add_insert, r15
-	call	#transition_to
-	jmp	.LBB8_10
-.LBB8_9:                                ; %if.else.10
-	mov.w	#_global_sibling, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_add_node, r15
-	call	#transition_to
-	jmp	.LBB8_10
-.LBB8_10:                               ; %if.end.11
-	add.w	#8, r1
-	pop.w	r4
-	ret
-.Lfunc_end8:
-	.size	task_find_sibling, .Lfunc_end8-task_find_sibling
-
-	.globl	task_add_node
-	.align	2
-	.type	task_add_node,@function
-task_add_node:                          ; @task_add_node
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#14, r1
-	mov.w	&_global_sibling, r12
-	mov.w	r12, -2(r4)
-	mov.w	r12, -6(r4)
-	mov.w	#6, r14
-	mov.w	r12, r15
-	call	#__mulhi3hw_noint
-	mov.w	r15, r12
-	add.w	#_global_dict, r12
-	mov.w	r12, -4(r4)
-	mov.w	_global_dict+2(r15), r12
-	cmp.w	#0, r12
-	jeq	.LBB9_2
-	jmp	.LBB9_1
-.LBB9_1:                                ; %if.then
-	;DEBUG_VALUE: next_sibling <- [FP+-8]
-	mov.w	-4(r4), r12
-	mov.w	2(r12), r12
-	mov.w	r12, -8(r4)
-	mov.w	r12, -2(r4)
-	mov.w	#_global_sibling, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_add_node, r15
-	call	#transition_to
-	jmp	.LBB9_3
-.LBB9_2:                                ; %if.else
-	;DEBUG_VALUE: sibling_node_obj <- [FP+-14]
-	mov.w	-4(r4), r12
-	mov.w	4(r12), r13
-	mov.w	r13, -10(r4)
-	mov.w	2(r12), r13
-	mov.w	r13, -12(r4)
-	mov.w	0(r12), r12
-	mov.w	r12, -14(r4)
-	mov.w	-10(r4), r12
-	mov.w	r12, &_global_sibling_node+4
-	mov.w	-12(r4), r12
-	mov.w	r12, &_global_sibling_node+2
-	mov.w	-14(r4), r12
-	mov.w	r12, &_global_sibling_node
-	mov.w	#_global_sibling, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
-	mov.w	#2, r13
-	call	#write_to_gbuf
-	mov.w	#_task_task_add_insert, r15
-	call	#transition_to
-	jmp	.LBB9_3
-.LBB9_3:                                ; %if.end
-	add.w	#14, r1
-	pop.w	r4
-	ret
-.Lfunc_end9:
-	.size	task_add_node, .Lfunc_end9-task_add_node
-
-	.globl	task_add_insert
-	.align	2
-	.type	task_add_insert,@function
-task_add_insert:                        ; @task_add_insert
+	.type	task_pad,@function
+task_pad:                               ; @task_pad
 ; BB#0:                                 ; %entry
 	push.w	r4
 	mov.w	r1, r4
 	sub.w	#26, r1
-	mov.w	&_global_node_count, r12
-	mov.w	r12, -2(r4)
-	cmp.w	#512, r12
-	jne	.LBB10_3
-	jmp	.LBB10_1
-.LBB10_1:                               ; %if.then
-	jmp	.LBB10_2
-.LBB10_2:                               ; %while.body
-                                        ; =>This Inner Loop Header: Depth=1
-	jmp	.LBB10_2
-.LBB10_3:                               ; %if.end
-	;DEBUG_VALUE: task_add_insert:child <- [FP+-4]
-	mov.w	-2(r4), r12
-	mov.w	r12, -4(r4)
-	;DEBUG_VALUE: task_add_insert:child_node <- [FP+-10]
-	mov.w	&_global_letter, r12
-	mov.w	r12, -10(r4)
-	mov.w	#0, -8(r4)
-	mov.w	#0, -6(r4)
-	mov.w	&_global_parent_node+4, r12
-	cmp.w	#0, r12
-	jne	.LBB10_5
-	jmp	.LBB10_4
-.LBB10_4:                               ; %if.then.3
-	;DEBUG_VALUE: parent_node_obj <- [FP+-16]
-	mov.w	&_global_parent_node+4, r12
-	mov.w	r12, -12(r4)
-	mov.w	&_global_parent_node+2, r12
-	mov.w	r12, -14(r4)
-	mov.w	&_global_parent_node, r12
-	mov.w	r12, -16(r4)
-	mov.w	-4(r4), r12
-	mov.w	r12, -12(r4)
-	;DEBUG_VALUE: i <- [FP+-18]
-	mov.w	&_global_parent, r12
-	mov.w	r12, -18(r4)
-	mov.w	#6, r14
+	mov.w	&_global_block_offset, r12
+	mov.w	r12, &_global_block_offset_bak
+	mov.w	&_global_message_length, r13
+	mov.w	r1, r14
+	mov.w	r12, 4(r14)
+	mov.w	r13, 2(r14)
+	mov.w	#.L.str.6, 0(r14)
+	call	#printf
+	mov.w	&_global_block_offset_bak, r12
+	mov.w	&_global_message_length, r13
+	cmp.w	r13, r12
+	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	jlo	.LBB3_2
+	jmp	.LBB3_1
+.LBB3_1:                                ; %if.then
+	mov.w	r1, r12
+	mov.w	#.L.str.7, 0(r12)
+	call	#printf
+	mov.w	#_global_block_offset, r14
+	mov.w	#_global_block_offset_bak, r12
+	mov.w	#2, r13
+	mov.w	r15, -8(r4)             ; 2-byte Folded Spill
 	mov.w	r12, r15
-	call	#__mulhi3hw_noint
-	mov.w	-12(r4), r12
-	mov.w	r12, _global_dict+4(r15)
-	mov.w	-14(r4), r12
-	mov.w	r12, _global_dict+2(r15)
-	mov.w	-16(r4), r12
-	mov.w	r12, _global_dict(r15)
-	jmp	.LBB10_6
-.LBB10_5:                               ; %if.else
-	;DEBUG_VALUE: last_sibling <- [FP+-20]
-	mov.w	&_global_sibling, r12
-	mov.w	r12, -20(r4)
-	;DEBUG_VALUE: last_sibling_node <- [FP+-26]
-	mov.w	&_global_sibling_node+4, r12
-	mov.w	r12, -22(r4)
-	mov.w	&_global_sibling_node+2, r12
-	mov.w	r12, -24(r4)
-	mov.w	&_global_sibling_node, r12
-	mov.w	r12, -26(r4)
-	mov.w	-4(r4), r12
-	mov.w	r12, -24(r4)
-	mov.w	-20(r4), r15
-	mov.w	#6, r14
-	call	#__mulhi3hw_noint
-	mov.w	-22(r4), r12
-	mov.w	r12, _global_dict+4(r15)
-	mov.w	-24(r4), r12
-	mov.w	r12, _global_dict+2(r15)
-	mov.w	-26(r4), r12
-	mov.w	r12, _global_dict(r15)
-	jmp	.LBB10_6
-.LBB10_6:                               ; %if.end.7
-	mov.w	-4(r4), r15
-	mov.w	#6, r14
-	call	#__mulhi3hw_noint
-	mov.w	-6(r4), r14
-	mov.w	r14, _global_dict+4(r15)
-	mov.w	-8(r4), r14
-	mov.w	r14, _global_dict+2(r15)
-	mov.w	-10(r4), r14
-	mov.w	r14, _global_dict(r15)
-	mov.w	&_global_parent, r14
-	mov.w	r14, &_global_symbol
-	mov.w	-2(r4), r14
-	add.w	#1, r14
-	mov.w	r14, -2(r4)
-	mov.w	#_global_node_count, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
+	call	#write_to_gbuf
+	mov.w	#_task_task_print_cyphertext, r15
+	call	#transition_to
+	jmp	.LBB3_2
+.LBB3_2:                                ; %if.end
+	mov.w	&_global_block_offset_bak, r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.8, 0(r13)
+	call	#printf
+	mov.w	#0, -2(r4)
+	mov.w	r15, -10(r4)            ; 2-byte Folded Spill
+	jmp	.LBB3_3
+.LBB3_3:                                ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#0, r12
+	jne	.LBB3_6
+	jmp	.LBB3_4
+.LBB3_4:                                ; %for.body
+                                        ;   in Loop: Header=BB3_3 Depth=1
+	mov.w	-2(r4), r12
+	mov.b	PAD_DIGITS(r12), r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.9, 0(r13)
+	call	#printf
+	mov.w	r15, -12(r4)            ; 2-byte Folded Spill
+	jmp	.LBB3_5
+.LBB3_5:                                ; %for.inc
+                                        ;   in Loop: Header=BB3_3 Depth=1
+	mov.w	-2(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -2(r4)
+	jmp	.LBB3_3
+.LBB3_6:                                ; %for.end
+	mov.w	r1, r12
+	mov.w	#.L.str.10, 0(r12)
+	call	#printf
+	mov.w	#14, -2(r4)
+	mov.w	r15, -14(r4)            ; 2-byte Folded Spill
+	jmp	.LBB3_7
+.LBB3_7:                                ; %for.cond.6
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#0, r12
+	jl	.LBB3_10
+	jmp	.LBB3_8
+.LBB3_8:                                ; %for.body.9
+                                        ;   in Loop: Header=BB3_7 Depth=1
+	mov.w	&_global_block_offset_bak, r12
+	mov.w	-2(r4), r13
+	add.w	r13, r12
+	mov.b	PLAINTEXT(r12), r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.9, 0(r13)
+	call	#printf
+	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
+	jmp	.LBB3_9
+.LBB3_9:                                ; %for.inc.13
+                                        ;   in Loop: Header=BB3_7 Depth=1
+	mov.w	-2(r4), r12
+	add.w	#-1, r12
+	mov.w	r12, -2(r4)
+	jmp	.LBB3_7
+.LBB3_10:                               ; %for.end.14
+	mov.w	r1, r12
+	mov.w	#.L.str.11, 0(r12)
+	call	#printf
+	;DEBUG_VALUE: task_pad:zero <- [FP+-4]
+	mov.w	#0, -4(r4)
+	mov.w	#0, -2(r4)
+	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
+	jmp	.LBB3_11
+.LBB3_11:                               ; %for.cond.16
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#15, r12
+	jhs	.LBB3_17
+	jmp	.LBB3_12
+.LBB3_12:                               ; %for.body.19
+                                        ;   in Loop: Header=BB3_11 Depth=1
+	mov.w	&_global_block_offset_bak, r12
+	mov.w	-2(r4), r13
+	add.w	r13, r12
+	mov.w	&_global_message_length, r13
+	cmp.w	r13, r12
+	jhs	.LBB3_14
+	jmp	.LBB3_13
+.LBB3_13:                               ; %cond.true
+                                        ;   in Loop: Header=BB3_11 Depth=1
+	mov.w	&_global_block_offset_bak, r12
+	mov.w	-2(r4), r13
+	add.w	r13, r12
+	mov.b	PLAINTEXT(r12), r12
+	mov.w	r12, -20(r4)            ; 2-byte Folded Spill
+	jmp	.LBB3_15
+.LBB3_14:                               ; %cond.false
+                                        ;   in Loop: Header=BB3_11 Depth=1
+	mov.w	#255, r12
+	mov.w	r12, -20(r4)            ; 2-byte Folded Spill
+	jmp	.LBB3_15
+.LBB3_15:                               ; %cond.end
+                                        ;   in Loop: Header=BB3_11 Depth=1
+	mov.w	-20(r4), r12            ; 2-byte Folded Reload
+	mov.w	-2(r4), r13
+	rla.w	r13
+	mov.w	r12, _global_base(r13)
+	jmp	.LBB3_16
+.LBB3_16:                               ; %for.inc.27
+                                        ;   in Loop: Header=BB3_11 Depth=1
+	mov.w	-2(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -2(r4)
+	jmp	.LBB3_11
+.LBB3_17:                               ; %for.end.29
+	mov.w	#15, -2(r4)
+	jmp	.LBB3_18
+.LBB3_18:                               ; %for.cond.30
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#16, r12
+	jge	.LBB3_21
+	jmp	.LBB3_19
+.LBB3_19:                               ; %for.body.33
+                                        ;   in Loop: Header=BB3_18 Depth=1
+	mov.w	-2(r4), r12
+	rla.w	r12
+	mov.w	#1, _global_base(r12)
+	jmp	.LBB3_20
+.LBB3_20:                               ; %for.inc.35
+                                        ;   in Loop: Header=BB3_18 Depth=1
+	mov.w	-2(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -2(r4)
+	jmp	.LBB3_18
+.LBB3_21:                               ; %for.end.37
+	mov.w	#1, &_global_block
+	mov.w	#1, -2(r4)
+	jmp	.LBB3_22
+.LBB3_22:                               ; %for.cond.38
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#16, r12
+	jge	.LBB3_25
+	jmp	.LBB3_23
+.LBB3_23:                               ; %for.body.41
+                                        ;   in Loop: Header=BB3_22 Depth=1
+	mov.w	-2(r4), r12
+	rla.w	r12
+	mov.w	#0, _global_block(r12)
+	jmp	.LBB3_24
+.LBB3_24:                               ; %for.inc.43
+                                        ;   in Loop: Header=BB3_22 Depth=1
+	mov.w	-2(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -2(r4)
+	jmp	.LBB3_22
+.LBB3_25:                               ; %for.end.45
+	mov.w	#_global_block_offset_bak, r15
+	mov.w	&_global_block_offset_bak, r12
+	add.w	#15, r12
+	mov.w	r12, &_global_block_offset_bak
+	mov.w	#_global_block_offset, r14
 	mov.w	#2, r13
 	call	#write_to_gbuf
-	mov.w	#_task_task_append_compressed, r15
+	mov.w	#_task_task_exp, r15
 	call	#transition_to
 	add.w	#26, r1
 	pop.w	r4
 	ret
-.Lfunc_end10:
-	.size	task_add_insert, .Lfunc_end10-task_add_insert
+.Lfunc_end3:
+	.size	task_pad, .Lfunc_end3-task_pad
 
-	.globl	task_append_compressed
+	.globl	task_exp
 	.align	2
-	.type	task_append_compressed,@function
-task_append_compressed:                 ; @task_append_compressed
+	.type	task_exp,@function
+task_exp:                               ; @task_exp
 ; BB#0:                                 ; %entry
 	push.w	r4
 	mov.w	r1, r4
 	sub.w	#6, r1
-	mov.w	&_global_out_len, r12
-	mov.w	r12, -2(r4)
-	mov.w	r12, -4(r4)
-	mov.w	&_global_symbol, r13
-	mov.w	#6, r14
-	mov.w	r12, r15
-	mov.w	r13, -6(r4)             ; 2-byte Folded Spill
-	call	#__mulhi3hw_noint
-	mov.w	-6(r4), r12             ; 2-byte Folded Reload
-	mov.w	r12, _global_compressed_data(r15)
-	mov.w	-2(r4), r12
-	add.w	#1, r12
-	mov.w	r12, -2(r4)
-	cmp.w	#64, r12
-	jne	.LBB11_2
-	jmp	.LBB11_1
-.LBB11_1:                               ; %if.then
-	mov.w	#_global_out_len, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
+	mov.w	&_global_exponent, r12
+	mov.w	r12, &_global_exponent_bak
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.12, 0(r13)
+	call	#printf
+	mov.b	&_global_exponent_bak, r14
+	bit.b	#1, r14
+	mov.w	r15, -2(r4)             ; 2-byte Folded Spill
+	jeq	.LBB4_2
+	jmp	.LBB4_1
+.LBB4_1:                                ; %if.then
+	mov.w	#_global_exponent_bak, r15
+	mov.w	&_global_exponent_bak, r12
+	clrc
+	rrc.w	r12
+	mov.w	r12, &_global_exponent_bak
+	mov.w	#_global_exponent, r14
 	mov.w	#2, r13
 	call	#write_to_gbuf
-	mov.w	#_task_task_print, r15
+	mov.w	#_task_task_mult_block, r15
 	call	#transition_to
-	jmp	.LBB11_3
-.LBB11_2:                               ; %if.else
-	mov.w	#_global_out_len, r14
-	mov.w	r4, r15
-	sub.w	#2, r15
+	jmp	.LBB4_3
+.LBB4_2:                                ; %if.else
+	mov.w	#_global_exponent_bak, r15
+	mov.w	&_global_exponent_bak, r12
+	clrc
+	rrc.w	r12
+	mov.w	r12, &_global_exponent_bak
+	mov.w	#_global_exponent, r14
 	mov.w	#2, r13
 	call	#write_to_gbuf
-	mov.w	#_task_task_sample, r15
+	mov.w	#_task_task_square_base, r15
 	call	#transition_to
-	jmp	.LBB11_3
-.LBB11_3:                               ; %if.end
+	jmp	.LBB4_3
+.LBB4_3:                                ; %if.end
 	add.w	#6, r1
 	pop.w	r4
 	ret
-.Lfunc_end11:
-	.size	task_append_compressed, .Lfunc_end11-task_append_compressed
+.Lfunc_end4:
+	.size	task_exp, .Lfunc_end4-task_exp
 
-	.globl	task_print
+	.globl	task_mult_block
 	.align	2
-	.type	task_print,@function
-task_print:                             ; @task_print
+	.type	task_mult_block,@function
+task_mult_block:                        ; @task_mult_block
 ; BB#0:                                 ; %entry
 	push.w	r4
 	mov.w	r1, r4
-	sub.w	#2, r1
-	mov.w	#_task_task_done, r15
+	sub.w	#4, r1
+	mov.w	r1, r12
+	mov.w	#.L.str.13, 0(r12)
+	call	#printf
+	mov.w	#_task_task_mult_block_get_result, &_global_next_task
+	mov.w	#_task_task_mult_mod, r12
+	mov.w	r15, -2(r4)             ; 2-byte Folded Spill
+	mov.w	r12, r15
 	call	#transition_to
-	add.w	#2, r1
+	add.w	#4, r1
 	pop.w	r4
 	ret
-.Lfunc_end12:
-	.size	task_print, .Lfunc_end12-task_print
+.Lfunc_end5:
+	.size	task_mult_block, .Lfunc_end5-task_mult_block
 
-	.globl	task_done
+	.globl	task_mult_block_get_result
 	.align	2
-	.type	task_done,@function
-task_done:                              ; @task_done
+	.type	task_mult_block_get_result,@function
+task_mult_block_get_result:             ; @task_mult_block_get_result
 ; BB#0:                                 ; %entry
 	push.w	r4
 	mov.w	r1, r4
-	sub.w	#54, r1
-	mov.w	&overflow, r12
-	mov.w	&0x03D0, r13
+	sub.w	#22, r1
+	mov.w	&_global_cyphertext_len, r12
+	mov.w	r12, &_global_cyphertext_len_bak
+	mov.w	r1, r12
+	mov.w	#.L.str.14, 0(r12)
+	call	#printf
+	mov.w	#15, -2(r4)
+	mov.w	r15, -4(r4)             ; 2-byte Folded Spill
+	jmp	.LBB6_1
+.LBB6_1:                                ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#0, r12
+	jl	.LBB6_4
+	jmp	.LBB6_2
+.LBB6_2:                                ; %for.body
+                                        ;   in Loop: Header=BB6_1 Depth=1
+	mov.w	-2(r4), r12
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	r13, _global_block(r12)
+	mov.w	-2(r4), r12
+	rla.w	r12
+	mov.w	_global_product(r12), r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.9, 0(r13)
+	call	#printf
+	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	jmp	.LBB6_3
+.LBB6_3:                                ; %for.inc
+                                        ;   in Loop: Header=BB6_1 Depth=1
+	mov.w	-2(r4), r12
+	add.w	#-1, r12
+	mov.w	r12, -2(r4)
+	jmp	.LBB6_1
+.LBB6_4:                                ; %for.end
+	mov.w	r1, r12
+	mov.w	#.L.str.11, 0(r12)
+	call	#printf
+	mov.w	&_global_exponent, r12
+	cmp.w	#0, r12
+	mov.w	r15, -8(r4)             ; 2-byte Folded Spill
+	jeq	.LBB6_6
+	jmp	.LBB6_5
+.LBB6_5:                                ; %if.then
+	mov.w	#_global_cyphertext_len, r14
+	mov.w	#_global_cyphertext_len_bak, r15
+	mov.w	#2, r13
+	call	#write_to_gbuf
+	mov.w	#_task_task_square_base, r15
+	call	#transition_to
+	jmp	.LBB6_14
+.LBB6_6:                                ; %if.else
+	mov.w	&_global_cyphertext_len_bak, r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.15, 0(r13)
+	call	#printf
+	mov.w	&_global_cyphertext_len_bak, r12
+	add.w	#16, r12
+	cmp.w	#17, r12
+	mov.w	r15, -10(r4)            ; 2-byte Folded Spill
+	jhs	.LBB6_12
+	jmp	.LBB6_7
+.LBB6_7:                                ; %if.then.8
+	mov.w	#0, -2(r4)
+	jmp	.LBB6_8
+.LBB6_8:                                ; %for.cond.9
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#16, r12
+	jge	.LBB6_11
+	jmp	.LBB6_9
+.LBB6_9:                                ; %for.body.11
+                                        ;   in Loop: Header=BB6_8 Depth=1
+	mov.w	-2(r4), r12
+	rla.w	r12
+	mov.w	_global_product(r12), r12
+	mov.w	&_global_cyphertext_len_bak, r13
+	rla.w	r13
+	mov.w	r12, _global_cyphertext(r13)
+	mov.w	&_global_cyphertext_len_bak, r12
+	add.w	#1, r12
+	mov.w	r12, &_global_cyphertext_len_bak
+	jmp	.LBB6_10
+.LBB6_10:                               ; %for.inc.14
+                                        ;   in Loop: Header=BB6_8 Depth=1
+	mov.w	-2(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -2(r4)
+	jmp	.LBB6_8
+.LBB6_11:                               ; %for.end.16
+	jmp	.LBB6_13
+.LBB6_12:                               ; %if.else.17
+	mov.w	&_global_cyphertext_len_bak, r12
+	add.w	#16, r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#16, 4(r13)
+	mov.w	#.L.str.16, 0(r13)
+	call	#printf
+	mov.w	r15, -12(r4)            ; 2-byte Folded Spill
+	jmp	.LBB6_13
+.LBB6_13:                               ; %if.end
+	mov.w	#_global_cyphertext_len_bak, r15
+	mov.w	&_global_cyphertext_len_bak, r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.17, 0(r13)
+	mov.w	r15, -14(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	#_global_cyphertext_len, r14
+	mov.w	#2, r13
+	mov.w	-14(r4), r12            ; 2-byte Folded Reload
+	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
+	mov.w	r12, r15
+	call	#write_to_gbuf
+	mov.w	#_task_task_pad, r15
+	call	#transition_to
+	jmp	.LBB6_14
+.LBB6_14:                               ; %if.end.21
+	add.w	#22, r1
+	pop.w	r4
+	ret
+.Lfunc_end6:
+	.size	task_mult_block_get_result, .Lfunc_end6-task_mult_block_get_result
+
+	.globl	task_square_base
+	.align	2
+	.type	task_square_base,@function
+task_square_base:                       ; @task_square_base
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	sub.w	#4, r1
+	mov.w	r1, r12
+	mov.w	#.L.str.18, 0(r12)
+	call	#printf
+	mov.w	#_task_task_square_base_get_result, &_global_next_task
+	mov.w	#_task_task_mult_mod, r12
+	mov.w	r15, -2(r4)             ; 2-byte Folded Spill
+	mov.w	r12, r15
+	call	#transition_to
+	add.w	#4, r1
+	pop.w	r4
+	ret
+.Lfunc_end7:
+	.size	task_square_base, .Lfunc_end7-task_square_base
+
+	.globl	task_square_base_get_result
+	.align	2
+	.type	task_square_base_get_result,@function
+task_square_base_get_result:            ; @task_square_base_get_result
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	sub.w	#14, r1
+	mov.w	r1, r12
+	mov.w	#.L.str.19, 0(r12)
+	call	#printf
+	mov.w	#0, -2(r4)
+	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	jmp	.LBB8_1
+.LBB8_1:                                ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#16, r12
+	jge	.LBB8_4
+	jmp	.LBB8_2
+.LBB8_2:                                ; %for.body
+                                        ;   in Loop: Header=BB8_1 Depth=1
+	mov.w	-2(r4), r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product(r13), r13
 	mov.w	r1, r14
 	mov.w	r13, 4(r14)
 	mov.w	r12, 2(r14)
-	mov.w	#.L.str, 0(r14)
-	call	#printf
-	mov.w	#0, -2(r4)
-	mov.w	r1, r12
-	mov.w	#42, 4(r12)
-	mov.w	#1, 2(r12)
-	mov.w	#.L.str.1, 0(r12)
-	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	mov.w	#.L.str.20, 0(r14)
 	call	#printf
 	mov.w	-2(r4), r12
-	add.w	#504, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#1, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	r13, _global_base(r12)
 	mov.w	r15, -8(r4)             ; 2-byte Folded Spill
-	call	#printf
+	jmp	.LBB8_3
+.LBB8_3:                                ; %for.inc
+                                        ;   in Loop: Header=BB8_1 Depth=1
 	mov.w	-2(r4), r12
-	add.w	#2, r12
+	add.w	#1, r12
 	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#2, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -10(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#3, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -12(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#4, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -14(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#5, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#3072, 4(r12)
-	mov.w	#6, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#3072, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#7, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#8, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#9, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#11, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -26(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#12, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -28(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#13, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -30(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#6, 4(r12)
-	mov.w	#14, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -32(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#6, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#384, 4(r12)
-	mov.w	#15, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -34(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#384, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#6, 4(r12)
-	mov.w	#16, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -36(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#6, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#2, 4(r12)
-	mov.w	#17, 2(r12)
-	mov.w	#.L.str.2, 0(r12)
-	mov.w	r15, -38(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#66, 2(r12)
-	mov.w	#.L.str.3, 0(r12)
-	mov.w	r15, -40(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#66, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#66, 2(r12)
-	mov.w	#.L.str.4, 0(r12)
-	mov.w	r15, -42(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#66, r12
-	mov.w	r12, -2(r4)
-	mov.w	r1, r12
-	mov.w	#66, 2(r12)
-	mov.w	#.L.str.5, 0(r12)
-	mov.w	r15, -44(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	-2(r4), r12
-	add.w	#66, r12
-	mov.w	r12, -2(r4)
+	jmp	.LBB8_1
+.LBB8_4:                                ; %for.end
+	mov.w	#_task_task_exp, r15
+	call	#transition_to
+	add.w	#14, r1
+	pop.w	r4
+	ret
+.Lfunc_end8:
+	.size	task_square_base_get_result, .Lfunc_end8-task_square_base_get_result
+
+	.globl	task_print_cyphertext
+	.align	2
+	.type	task_print_cyphertext,@function
+task_print_cyphertext:                  ; @task_print_cyphertext
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	sub.w	#28, r1
+	mov.w	#0, -6(r4)
+	mov.w	&_global_cyphertext_len, r12
 	mov.w	r1, r13
 	mov.w	r12, 2(r13)
-	mov.w	#.L.str.6, 0(r13)
-	mov.w	r15, -46(r4)            ; 2-byte Folded Spill
+	mov.w	#.L.str.21, 0(r13)
 	call	#printf
-	mov.w	r15, -48(r4)            ; 2-byte Folded Spill
-	add.w	#54, r1
+	mov.w	#0, -4(r4)
+	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
+	jmp	.LBB9_1
+.LBB9_1:                                ; %for.cond
+                                        ; =>This Loop Header: Depth=1
+                                        ;     Child Loop BB9_4 Depth 2
+	mov.w	-4(r4), r12
+	mov.w	&_global_cyphertext_len, r13
+	cmp.w	r13, r12
+	jhs	.LBB9_13
+	jmp	.LBB9_2
+.LBB9_2:                                ; %for.body
+                                        ;   in Loop: Header=BB9_1 Depth=1
+	mov.w	-4(r4), r12
+	rla.w	r12
+	mov.w	_global_cyphertext(r12), r12
+	mov.w	r12, -8(r4)
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.22, 0(r13)
+	call	#printf
+	mov.b	-8(r4), r14
+	mov.w	-6(r4), r12
+	mov.w	r12, r13
+	add.w	#1, r13
+	mov.w	r13, -6(r4)
+	mov.w	r4, r13
+	sub.w	#16, r13
+	add.w	r12, r13
+	mov.b	r14, 0(r13)
+	mov.w	-4(r4), r12
+	add.w	#1, r12
+	mov.w	r12, r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	clrc
+	rrc.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	rra.w	r13
+	mov.w	r12, r11
+	add.w	r13, r11
+	and.w	#-8, r11
+	sub.w	r11, r12
+	cmp.w	#0, r12
+	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
+	jne	.LBB9_11
+	jmp	.LBB9_3
+.LBB9_3:                                ; %if.then
+                                        ;   in Loop: Header=BB9_1 Depth=1
+	mov.w	r1, r12
+	mov.w	#.L.str.23, 0(r12)
+	call	#printf
+	mov.w	#0, -6(r4)
+	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
+	jmp	.LBB9_4
+.LBB9_4:                                ; %for.cond.6
+                                        ;   Parent Loop BB9_1 Depth=1
+                                        ; =>  This Inner Loop Header: Depth=2
+	mov.w	-6(r4), r12
+	cmp.w	#8, r12
+	jge	.LBB9_10
+	jmp	.LBB9_5
+.LBB9_5:                                ; %for.body.9
+                                        ;   in Loop: Header=BB9_4 Depth=2
+	mov.w	-6(r4), r12
+	mov.w	r4, r13
+	sub.w	#16, r13
+	add.w	r12, r13
+	mov.b	0(r13), r12
+	sxt	r12
+	mov.w	r12, -8(r4)
+	cmp.w	#32, r12
+	jlo	.LBB9_7
+	jmp	.LBB9_6
+.LBB9_6:                                ; %land.lhs.true
+                                        ;   in Loop: Header=BB9_4 Depth=2
+	mov.w	-8(r4), r12
+	cmp.w	#128, r12
+	jlo	.LBB9_8
+	jmp	.LBB9_7
+.LBB9_7:                                ; %if.then.16
+                                        ;   in Loop: Header=BB9_4 Depth=2
+	mov.w	#46, -8(r4)
+	jmp	.LBB9_8
+.LBB9_8:                                ; %if.end
+                                        ;   in Loop: Header=BB9_4 Depth=2
+	mov.w	-8(r4), r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.24, 0(r13)
+	call	#printf
+	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
+	jmp	.LBB9_9
+.LBB9_9:                                ; %for.inc
+                                        ;   in Loop: Header=BB9_4 Depth=2
+	mov.w	-6(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -6(r4)
+	jmp	.LBB9_4
+.LBB9_10:                               ; %for.end
+                                        ;   in Loop: Header=BB9_1 Depth=1
+	mov.w	#0, -6(r4)
+	mov.w	r1, r12
+	mov.w	#.L.str.11, 0(r12)
+	call	#printf
+	mov.w	r15, -26(r4)            ; 2-byte Folded Spill
+	jmp	.LBB9_11
+.LBB9_11:                               ; %if.end.20
+                                        ;   in Loop: Header=BB9_1 Depth=1
+	jmp	.LBB9_12
+.LBB9_12:                               ; %for.inc.21
+                                        ;   in Loop: Header=BB9_1 Depth=1
+	mov.w	-4(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -4(r4)
+	jmp	.LBB9_1
+.LBB9_13:                               ; %for.end.23
+	add.w	#28, r1
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end9:
+	.size	task_print_cyphertext, .Lfunc_end9-task_print_cyphertext
+
+	.globl	task_mult_mod
+	.align	2
+	.type	task_mult_mod,@function
+task_mult_mod:                          ; @task_mult_mod
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	sub.w	#4, r1
+	mov.w	r1, r12
+	mov.w	#.L.str.25, 0(r12)
+	call	#printf
+	mov.w	#0, &_global_digit
+	mov.w	#0, &_global_carry
+	mov.w	#_task_task_mult, r12
+	mov.w	r15, -2(r4)             ; 2-byte Folded Spill
+	mov.w	r12, r15
+	call	#transition_to
+	add.w	#4, r1
+	pop.w	r4
+	ret
+.Lfunc_end10:
+	.size	task_mult_mod, .Lfunc_end10-task_mult_mod
+
+	.globl	task_mult
+	.align	2
+	.type	task_mult,@function
+task_mult:                              ; @task_mult
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	sub.w	#32, r1
+	mov.w	&_global_carry, r12
+	mov.w	r12, &_global_carry_bak
+	mov.w	&_global_digit, r12
+	mov.w	r12, &_global_digit_bak
+	mov.w	&_global_carry_bak, r13
+	mov.w	r1, r14
+	mov.w	r13, 4(r14)
+	mov.w	r12, 2(r14)
+	mov.w	#.L.str.26, 0(r14)
+	call	#printf
+	mov.w	&_global_carry_bak, r12
+	mov.w	r12, -14(r4)
+	mov.w	#0, -10(r4)
+	mov.w	#0, -4(r4)
+	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
+	jmp	.LBB11_1
+.LBB11_1:                               ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-4(r4), r12
+	cmp.w	#16, r12
+	jge	.LBB11_7
+	jmp	.LBB11_2
+.LBB11_2:                               ; %for.body
+                                        ;   in Loop: Header=BB11_1 Depth=1
+	mov.w	&_global_digit_bak, r12
+	mov.w	-4(r4), r13
+	sub.w	r13, r12
+	cmp.w	#0, r12
+	jlo	.LBB11_5
+	jmp	.LBB11_3
+.LBB11_3:                               ; %land.lhs.true
+                                        ;   in Loop: Header=BB11_1 Depth=1
+	mov.w	&_global_digit_bak, r12
+	mov.w	-4(r4), r13
+	sub.w	r13, r12
+	cmp.w	#16, r12
+	jhs	.LBB11_5
+	jmp	.LBB11_4
+.LBB11_4:                               ; %if.then
+                                        ;   in Loop: Header=BB11_1 Depth=1
+	mov.w	&_global_digit_bak, r12
+	mov.w	-4(r4), r13
+	sub.w	r13, r12
+	rla.w	r12
+	mov.w	_global_base(r12), r12
+	mov.w	r12, -6(r4)
+	mov.w	-4(r4), r12
+	rla.w	r12
+	mov.w	_global_block(r12), r12
+	mov.w	r12, -8(r4)
+	mov.w	-6(r4), r15
+	mov.w	r12, r14
+	call	#__mulhi3hw_noint
+	mov.w	r15, -12(r4)
+	mov.b	-11(r4), r12
+	mov.w	-10(r4), r13
+	add.w	r12, r13
+	mov.w	r13, -10(r4)
+	mov.b	-12(r4), r12
+	mov.w	-14(r4), r13
+	add.w	r12, r13
+	mov.w	r13, -14(r4)
+	mov.w	-4(r4), r12
+	mov.w	-6(r4), r14
+	mov.w	-8(r4), r15
+	mov.w	r1, r11
+	mov.w	r13, 8(r11)
+	mov.w	r15, 6(r11)
+	mov.w	r14, 4(r11)
+	mov.w	r12, 2(r11)
+	mov.w	#.L.str.27, 0(r11)
+	call	#printf
+	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
+	jmp	.LBB11_5
+.LBB11_5:                               ; %if.end
+                                        ;   in Loop: Header=BB11_1 Depth=1
+	jmp	.LBB11_6
+.LBB11_6:                               ; %for.inc
+                                        ;   in Loop: Header=BB11_1 Depth=1
+	mov.w	-4(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -4(r4)
+	jmp	.LBB11_1
+.LBB11_7:                               ; %for.end
+	mov.b	-13(r4), r12
+	mov.w	-10(r4), r13
+	add.w	r12, r13
+	mov.w	r13, -10(r4)
+	mov.b	-14(r4), r12
+	mov.w	r12, -14(r4)
+	mov.w	-10(r4), r13
+	mov.w	r1, r14
+	mov.w	r12, 4(r14)
+	mov.w	r13, 2(r14)
+	mov.w	#.L.str.28, 0(r14)
+	call	#printf
+	mov.w	-14(r4), r12
+	mov.w	&_global_digit_bak, r13
+	rla.w	r13
+	mov.w	r12, _global_product(r13)
+	mov.b	#0, &_global_print_which
+	mov.w	&_global_digit_bak, r12
+	add.w	#1, r12
+	mov.w	r12, &_global_digit_bak
+	cmp.w	#32, r12
+	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
+	jhs	.LBB11_9
+	jmp	.LBB11_8
+.LBB11_8:                               ; %if.then.15
+	mov.w	-10(r4), r12
+	mov.w	r12, &_global_carry_bak
+	mov.w	#_global_carry_bak, r15
+	mov.w	#_global_carry, r14
+	mov.w	#2, r12
+	mov.w	r12, r13
+	mov.w	r12, -22(r4)            ; 2-byte Folded Spill
+	call	#write_to_gbuf
+	mov.w	#_global_digit, r14
+	mov.w	#_global_digit_bak, r15
+	mov.w	-22(r4), r13            ; 2-byte Folded Reload
+	call	#write_to_gbuf
+	mov.w	#_task_task_mult, r15
+	call	#transition_to
+	jmp	.LBB11_10
+.LBB11_9:                               ; %if.else
+	mov.w	#_task_task_reduce_digits, &_global_next_task_print
+	mov.w	#_global_carry, r14
+	mov.w	#_global_carry_bak, r15
+	mov.w	#2, r12
+	mov.w	r12, r13
+	mov.w	r12, -24(r4)            ; 2-byte Folded Spill
+	call	#write_to_gbuf
+	mov.w	#_global_digit, r14
+	mov.w	#_global_digit_bak, r15
+	mov.w	-24(r4), r13            ; 2-byte Folded Reload
+	call	#write_to_gbuf
+	mov.w	#_task_task_print_product, r15
+	call	#transition_to
+	jmp	.LBB11_10
+.LBB11_10:                              ; %if.end.16
+	add.w	#32, r1
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end11:
+	.size	task_mult, .Lfunc_end11-task_mult
+
+	.globl	task_reduce_digits
+	.align	2
+	.type	task_reduce_digits,@function
+task_reduce_digits:                     ; @task_reduce_digits
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	sub.w	#22, r1
+	mov.w	r1, r12
+	mov.w	#.L.str.29, 0(r12)
+	call	#printf
+	mov.w	#32, -2(r4)
+	mov.w	r15, -4(r4)             ; 2-byte Folded Spill
+	jmp	.LBB12_1
+.LBB12_1:                               ; %do.body
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	add.w	#-1, r12
+	mov.w	r12, -2(r4)
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product(r13), r13
+	mov.w	r1, r14
+	mov.w	r13, 4(r14)
+	mov.w	r12, 2(r14)
+	mov.w	#.L.str.30, 0(r14)
+	call	#printf
+	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	jmp	.LBB12_2
+.LBB12_2:                               ; %do.cond
+                                        ;   in Loop: Header=BB12_1 Depth=1
+	mov.w	-2(r4), r12
+	rla.w	r12
+	mov.w	_global_product(r12), r12
+	mov.b	#0, r13
+	cmp.w	#0, r12
+	mov.b	r13, -7(r4)             ; 1-byte Folded Spill
+	jne	.LBB12_6
+	jmp	.LBB12_3
+.LBB12_3:                               ; %land.rhs
+                                        ;   in Loop: Header=BB12_1 Depth=1
+	mov.w	-2(r4), r12
+	mov.w	#0, r13
+	mov.w	#1, r14
+	cmp.w	#1, r12
+	mov.w	r13, -10(r4)            ; 2-byte Folded Spill
+	mov.w	r14, -12(r4)            ; 2-byte Folded Spill
+	jge	.LBB12_5
+; BB#4:                                 ; %land.rhs
+                                        ;   in Loop: Header=BB12_1 Depth=1
+	mov.w	-10(r4), r12            ; 2-byte Folded Reload
+	mov.w	r12, -12(r4)            ; 2-byte Folded Spill
+.LBB12_5:                               ; %land.rhs
+                                        ;   in Loop: Header=BB12_1 Depth=1
+	mov.w	-12(r4), r12            ; 2-byte Folded Reload
+	mov.b	r12, r13
+	mov.b	r13, -7(r4)             ; 1-byte Folded Spill
+	jmp	.LBB12_6
+.LBB12_6:                               ; %land.end
+                                        ;   in Loop: Header=BB12_1 Depth=1
+	mov.b	-7(r4), r12             ; 1-byte Folded Reload
+	mov.b	r12, r13
+	bit.w	#1, r13
+	jne	.LBB12_1
+	jmp	.LBB12_7
+.LBB12_7:                               ; %do.end
+	mov.w	-2(r4), r12
+	rla.w	r12
+	mov.w	_global_product(r12), r12
+	cmp.w	#0, r12
+	jne	.LBB12_9
+	jmp	.LBB12_8
+.LBB12_8:                               ; %if.then
+	mov.w	r1, r12
+	mov.w	#.L.str.31, 0(r12)
+	call	#printf
+	mov.w	#_task_task_init, r12
+	mov.w	r15, -14(r4)            ; 2-byte Folded Spill
+	mov.w	r12, r15
+	call	#transition_to
+	jmp	.LBB12_9
+.LBB12_9:                               ; %if.end
+	mov.w	-2(r4), r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.32, 0(r13)
+	call	#printf
+	mov.w	-2(r4), r12
+	mov.w	r12, &_global_reduce
+	mov.w	#_task_task_reduce_normalizable, r12
+	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
+	mov.w	r12, r15
+	call	#transition_to
+	add.w	#22, r1
+	pop.w	r4
+	ret
+.Lfunc_end12:
+	.size	task_reduce_digits, .Lfunc_end12-task_reduce_digits
+
+	.globl	task_reduce_normalizable
+	.align	2
+	.type	task_reduce_normalizable,@function
+task_reduce_normalizable:               ; @task_reduce_normalizable
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	sub.w	#32, r1
+	mov.b	#1, -13(r4)
+	mov.w	r1, r12
+	mov.w	#.L.str.33, 0(r12)
+	call	#printf
+	mov.w	&_global_reduce, r12
+	mov.w	r12, -10(r4)
+	mov.w	&_global_reduce, r12
+	add.w	#-15, r12
+	mov.w	r12, &_global_offset
+	mov.w	&_global_reduce, r13
+	mov.w	r1, r14
+	mov.w	r12, 4(r14)
+	mov.w	r13, 2(r14)
+	mov.w	#.L.str.34, 0(r14)
+	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	&_global_reduce, r12
+	mov.w	r12, -4(r4)
+	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
+	jmp	.LBB13_1
+.LBB13_1:                               ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-4(r4), r12
+	cmp.w	#0, r12
+	jl	.LBB13_9
+	jmp	.LBB13_2
+.LBB13_2:                               ; %for.body
+                                        ;   in Loop: Header=BB13_1 Depth=1
+	mov.w	-4(r4), r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product(r13), r13
+	mov.w	-12(r4), r14
+	mov.w	r12, r15
+	sub.w	r14, r15
+	mov.w	r15, r14
+	rla.w	r14
+	mov.w	_global_modulus(r14), r14
+	mov.w	r1, r11
+	mov.w	r14, 8(r11)
+	mov.w	r15, 6(r11)
+	mov.w	r13, 4(r11)
+	mov.w	r12, 2(r11)
+	mov.w	#.L.str.35, 0(r11)
+	call	#printf
+	mov.w	-4(r4), r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product(r13), r13
+	mov.w	-12(r4), r14
+	sub.w	r14, r12
+	rla.w	r12
+	mov.w	_global_modulus(r12), r12
+	cmp.w	r13, r12
+	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
+	jhs	.LBB13_4
+	jmp	.LBB13_3
+.LBB13_3:                               ; %if.then
+	jmp	.LBB13_9
+.LBB13_4:                               ; %if.else
+                                        ;   in Loop: Header=BB13_1 Depth=1
+	mov.w	-4(r4), r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product(r13), r13
+	mov.w	-12(r4), r14
+	sub.w	r14, r12
+	rla.w	r12
+	mov.w	_global_modulus(r12), r12
+	cmp.w	r12, r13
+	jhs	.LBB13_6
+	jmp	.LBB13_5
+.LBB13_5:                               ; %if.then.14
+	mov.b	#0, -13(r4)
+	jmp	.LBB13_9
+.LBB13_6:                               ; %if.end
+                                        ;   in Loop: Header=BB13_1 Depth=1
+	jmp	.LBB13_7
+.LBB13_7:                               ; %if.end.15
+                                        ;   in Loop: Header=BB13_1 Depth=1
+	jmp	.LBB13_8
+.LBB13_8:                               ; %for.inc
+                                        ;   in Loop: Header=BB13_1 Depth=1
+	mov.w	-4(r4), r12
+	add.w	#-1, r12
+	mov.w	r12, -4(r4)
+	jmp	.LBB13_1
+.LBB13_9:                               ; %for.end
+	mov.b	-13(r4), r12
+	bit.w	#1, r12
+	jne	.LBB13_12
+	jmp	.LBB13_10
+.LBB13_10:                              ; %land.lhs.true
+	mov.w	&_global_reduce, r12
+	cmp.w	#15, r12
+	jne	.LBB13_12
+	jmp	.LBB13_11
+.LBB13_11:                              ; %if.then.17
+	mov.w	r1, r12
+	mov.w	#.L.str.36, 0(r12)
+	call	#printf
+	mov.w	&_global_next_task, r12
+	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
+	mov.w	r12, r15
+	call	#transition_to
+	jmp	.LBB13_12
+.LBB13_12:                              ; %if.end.19
+	mov.b	-13(r4), r12
+	and.w	#1, r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.37, 0(r13)
+	call	#printf
+	mov.b	-13(r4), r12
+	bit.w	#1, r12
+	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
+	jeq	.LBB13_14
+	jmp	.LBB13_13
+.LBB13_13:                              ; %if.then.23
+	mov.w	#_task_task_reduce_normalize, r15
+	call	#transition_to
+	jmp	.LBB13_15
+.LBB13_14:                              ; %if.else.24
+	mov.w	#_task_task_reduce_n_divisor, r15
+	call	#transition_to
+	jmp	.LBB13_15
+.LBB13_15:                              ; %if.end.25
+	add.w	#32, r1
+	pop.w	r11
 	pop.w	r4
 	ret
 .Lfunc_end13:
-	.size	task_done, .Lfunc_end13-task_done
+	.size	task_reduce_normalizable, .Lfunc_end13-task_reduce_normalizable
+
+	.globl	task_reduce_normalize
+	.align	2
+	.type	task_reduce_normalize,@function
+task_reduce_normalize:                  ; @task_reduce_normalize
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	push.w	r10
+	push.w	r9
+	sub.w	#42, r1
+	mov.w	r1, r12
+	mov.w	#.L.str.38, 0(r12)
+	call	#printf
+	mov.b	#0, &_global_print_which
+	mov.w	#0, -16(r4)
+	mov.w	#0, -18(r4)
+	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
+	jmp	.LBB14_1
+.LBB14_1:                               ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-18(r4), r12
+	cmp.w	#16, r12
+	jge	.LBB14_11
+	jmp	.LBB14_2
+.LBB14_2:                               ; %for.body
+                                        ;   in Loop: Header=BB14_1 Depth=1
+	mov.w	-18(r4), r12
+	mov.w	&_global_offset, r13
+	add.w	r13, r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product_isDirty(r13), r13
+	mov.w	&_numBoots, r14
+	cmp.w	r14, r13
+	mov.w	r12, -22(r4)            ; 2-byte Folded Spill
+	jeq	.LBB14_4
+	jmp	.LBB14_3
+.LBB14_3:                               ; %for.body.split1
+                                        ;   in Loop: Header=BB14_1 Depth=1
+	mov.w	-22(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	r13, _global_product_bak(r12)
+	jmp	.LBB14_4
+.LBB14_4:                               ; %for.body.split
+                                        ;   in Loop: Header=BB14_1 Depth=1
+	mov.w	-22(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product_bak(r12), r12
+	mov.w	r12, -8(r4)
+	mov.w	-18(r4), r12
+	rla.w	r12
+	mov.w	_global_modulus(r12), r12
+	mov.w	r12, -10(r4)
+	mov.w	-16(r4), r13
+	add.w	r13, r12
+	mov.w	r12, -14(r4)
+	mov.w	-8(r4), r13
+	cmp.w	r12, r13
+	jhs	.LBB14_6
+	jmp	.LBB14_5
+.LBB14_5:                               ; %if.then
+                                        ;   in Loop: Header=BB14_1 Depth=1
+	mov.w	-8(r4), r12
+	add.w	#256, r12
+	mov.w	r12, -8(r4)
+	mov.w	#1, -16(r4)
+	jmp	.LBB14_7
+.LBB14_6:                               ; %if.else
+                                        ;   in Loop: Header=BB14_1 Depth=1
+	mov.w	#0, -16(r4)
+	jmp	.LBB14_7
+.LBB14_7:                               ; %if.end
+                                        ;   in Loop: Header=BB14_1 Depth=1
+	mov.w	-8(r4), r12
+	mov.w	-14(r4), r13
+	sub.w	r13, r12
+	mov.w	r12, -12(r4)
+	mov.w	-18(r4), r13
+	mov.w	&_global_offset, r14
+	mov.w	r13, r15
+	add.w	r14, r15
+	mov.w	-8(r4), r14
+	mov.w	-10(r4), r11
+	mov.w	-16(r4), r10
+	mov.w	r1, r9
+	mov.w	r12, 12(r9)
+	mov.w	r10, 10(r9)
+	mov.w	r11, 8(r9)
+	mov.w	r13, 6(r9)
+	mov.w	r14, 4(r9)
+	mov.w	r15, 2(r9)
+	mov.w	#.L.str.39, 0(r9)
+	call	#printf
+	mov.w	-12(r4), r12
+	mov.w	-18(r4), r13
+	mov.w	&_global_offset, r14
+	add.w	r14, r13
+	rla.w	r13
+	mov.w	r13, r14
+	add.w	#_global_product, r14
+	mov.w	r13, r11
+	add.w	#_global_product_bak, r11
+	mov.w	&_numBoots, r10
+	mov.w	r12, _global_product_bak(r13)
+	mov.w	r13, r12
+	add.w	#_global_product_isDirty, r12
+	mov.w	_global_product_isDirty(r13), r13
+	cmp.w	r10, r13
+	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
+	mov.w	r10, -26(r4)            ; 2-byte Folded Spill
+	mov.w	r12, -28(r4)            ; 2-byte Folded Spill
+	mov.w	r14, -30(r4)            ; 2-byte Folded Spill
+	mov.w	r11, -32(r4)            ; 2-byte Folded Spill
+	jeq	.LBB14_9
+	jmp	.LBB14_8
+.LBB14_8:                               ; %if.end.split2
+                                        ;   in Loop: Header=BB14_1 Depth=1
+	mov.w	#2, r13
+	mov.w	-32(r4), r15            ; 2-byte Folded Reload
+	mov.w	-30(r4), r14            ; 2-byte Folded Reload
+	call	#write_to_gbuf
+	mov.w	-28(r4), r13            ; 2-byte Folded Reload
+	mov.w	-26(r4), r14            ; 2-byte Folded Reload
+	mov.w	r14, 0(r13)
+	jmp	.LBB14_9
+.LBB14_9:                               ; %if.end.split
+                                        ;   in Loop: Header=BB14_1 Depth=1
+	jmp	.LBB14_10
+.LBB14_10:                              ; %for.inc
+                                        ;   in Loop: Header=BB14_1 Depth=1
+	mov.w	-18(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -18(r4)
+	jmp	.LBB14_1
+.LBB14_11:                              ; %for.end
+	mov.w	&_global_offset, r12
+	cmp.w	#0, r12
+	jeq	.LBB14_13
+	jmp	.LBB14_12
+.LBB14_12:                              ; %if.then.10
+	mov.w	#_task_task_reduce_n_divisor, &_global_next_task_print
+	jmp	.LBB14_14
+.LBB14_13:                              ; %if.else.11
+	mov.w	r1, r12
+	mov.w	#.L.str.40, 0(r12)
+	call	#printf
+	mov.w	&_global_next_task, r12
+	mov.w	r12, &_global_next_task_print
+	mov.w	r15, -34(r4)            ; 2-byte Folded Spill
+	jmp	.LBB14_14
+.LBB14_14:                              ; %if.end.13
+	mov.w	#_task_task_print_product, r15
+	call	#transition_to
+	add.w	#42, r1
+	pop.w	r9
+	pop.w	r10
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end14:
+	.size	task_reduce_normalize, .Lfunc_end14-task_reduce_normalize
+
+	.globl	task_reduce_n_divisor
+	.align	2
+	.type	task_reduce_n_divisor,@function
+task_reduce_n_divisor:                  ; @task_reduce_n_divisor
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	sub.w	#12, r1
+	mov.w	r1, r12
+	mov.w	#.L.str.41, 0(r12)
+	call	#printf
+	mov.w	&_global_modulus+30, r12
+	rla.w	r12
+	rla.w	r12
+	rla.w	r12
+	rla.w	r12
+	rla.w	r12
+	rla.w	r12
+	rla.w	r12
+	rla.w	r12
+	mov.w	&_global_modulus+28, r13
+	add.w	r13, r12
+	mov.w	r12, &_global_n_div
+	mov.w	&_global_modulus+30, r13
+	mov.w	&_global_modulus+28, r14
+	mov.w	r1, r11
+	mov.w	r12, 6(r11)
+	mov.w	r14, 4(r11)
+	mov.w	r13, 2(r11)
+	mov.w	#.L.str.42, 0(r11)
+	mov.w	r15, -4(r4)             ; 2-byte Folded Spill
+	call	#printf
+	mov.w	#_task_task_reduce_quotient, r12
+	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	mov.w	r12, r15
+	call	#transition_to
+	add.w	#12, r1
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end15:
+	.size	task_reduce_n_divisor, .Lfunc_end15-task_reduce_n_divisor
+
+	.globl	task_reduce_quotient
+	.align	2
+	.type	task_reduce_quotient,@function
+task_reduce_quotient:                   ; @task_reduce_quotient
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	push.w	r10
+	push.w	r9
+	sub.w	#54, r1
+	mov.w	&_global_quotient, r12
+	mov.w	r12, &_global_quotient_bak
+	mov.w	&_global_reduce, r12
+	mov.w	r12, &_global_reduce_bak
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.43, 0(r13)
+	call	#printf
+	mov.w	&_global_modulus+30, r12
+	mov.w	&_global_reduce_bak, r13
+	rla.w	r13
+	mov.w	_global_product(r13), r13
+	mov.w	r1, r14
+	mov.w	r13, 4(r14)
+	mov.w	r12, 2(r14)
+	mov.w	#.L.str.44, 0(r14)
+	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	&_global_reduce_bak, r12
+	rla.w	r12
+	mov.w	_global_product(r12), r12
+	mov.w	&_global_modulus+30, r13
+	cmp.w	r13, r12
+	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
+	jne	.LBB16_2
+	jmp	.LBB16_1
+.LBB16_1:                               ; %if.then
+	mov.w	#255, &_global_quotient_bak
+	jmp	.LBB16_3
+.LBB16_2:                               ; %if.else
+	mov.w	&_global_reduce_bak, r12
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	rla.w	r13
+	rla.w	r13
+	rla.w	r13
+	rla.w	r13
+	rla.w	r13
+	rla.w	r13
+	rla.w	r13
+	rla.w	r13
+	mov.w	_global_product-2(r12), r12
+	add.w	r12, r13
+	mov.w	&_global_modulus+30, r14
+	mov.w	r13, r15
+	call	#__udivhi3
+	mov.w	r15, &_global_quotient_bak
+	jmp	.LBB16_3
+.LBB16_3:                               ; %if.end
+	mov.w	-10(r4), r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.45, 0(r13)
+	call	#printf
+	mov.w	&_global_reduce_bak, r12
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	_global_product-2(r12), r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	mov.w	_global_product-4(r12), r12
+	add.w	r12, r14
+	addc.w	#0, r13
+	mov.w	r13, -18(r4)
+	mov.w	r14, -20(r4)
+	mov.w	&_global_reduce_bak, r12
+	rla.w	r12
+	mov.w	_global_product(r12), r11
+	mov.w	_global_product-2(r12), r10
+	mov.w	_global_product-4(r12), r12
+	mov.w	r1, r9
+	mov.w	r14, 10(r9)
+	mov.w	r13, 8(r9)
+	mov.w	r12, 6(r9)
+	mov.w	r10, 4(r9)
+	mov.w	r11, 2(r9)
+	mov.w	#.L.str.46, 0(r9)
+	mov.w	r15, -26(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	&_global_n_div, r12
+	mov.w	&_global_quotient_bak, r13
+	mov.w	r1, r14
+	mov.w	r13, 4(r14)
+	mov.w	r12, 2(r14)
+	mov.w	#.L.str.47, 0(r14)
+	mov.w	r15, -28(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	&_global_quotient_bak, r12
+	add.w	#1, r12
+	mov.w	r12, &_global_quotient_bak
+	mov.w	r15, -30(r4)            ; 2-byte Folded Spill
+	jmp	.LBB16_4
+.LBB16_4:                               ; %do.body
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	&_global_quotient_bak, r12
+	add.w	#-1, r12
+	mov.w	r12, &_global_quotient_bak
+	mov.w	&_global_n_div, r15
+	mov.w	r12, r14
+	call	#mult16
+	mov.w	r15, -14(r4)
+	mov.w	r14, -16(r4)
+	mov.w	-14(r4), r12
+	mov.w	r1, r14
+	mov.w	r12, 2(r14)
+	mov.w	#.L.str.48, 0(r14)
+	call	#printf
+	mov.w	-16(r4), r12
+	mov.w	r1, r14
+	mov.w	r12, 2(r14)
+	mov.w	#.L.str.49, 0(r14)
+	mov.w	r15, -32(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	&_global_quotient_bak, r12
+	mov.w	-14(r4), r14
+	mov.w	-16(r4), r13
+	mov.w	r1, r11
+	mov.w	r13, 6(r11)
+	mov.w	r14, 4(r11)
+	mov.w	r12, 2(r11)
+	mov.w	#.L.str.50, 0(r11)
+	mov.w	r15, -34(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	r15, -36(r4)            ; 2-byte Folded Spill
+	jmp	.LBB16_5
+.LBB16_5:                               ; %do.cond
+                                        ;   in Loop: Header=BB16_4 Depth=1
+	mov.w	-16(r4), r12
+	mov.w	-14(r4), r13
+	mov.w	-20(r4), r14
+	mov.w	-18(r4), r15
+	cmp.w	r13, r15
+	mov.w	r2, r11
+	mov.w	#1, r10
+	mov.w	r10, r9
+	bic.w	r11, r9
+	cmp.w	r12, r14
+	mov.w	r2, r12
+	bic.w	r12, r10
+	cmp.w	r15, r13
+	mov.w	r9, -38(r4)             ; 2-byte Folded Spill
+	mov.w	r10, -40(r4)            ; 2-byte Folded Spill
+	jeq	.LBB16_7
+; BB#6:                                 ; %do.cond
+                                        ;   in Loop: Header=BB16_4 Depth=1
+	mov.w	-38(r4), r12            ; 2-byte Folded Reload
+	mov.w	r12, -40(r4)            ; 2-byte Folded Spill
+.LBB16_7:                               ; %do.cond
+                                        ;   in Loop: Header=BB16_4 Depth=1
+	mov.w	-40(r4), r12            ; 2-byte Folded Reload
+	bit.w	#1, r12
+	jne	.LBB16_4
+	jmp	.LBB16_8
+.LBB16_8:                               ; %do.end
+	mov.w	#_global_quotient_bak, r15
+	mov.w	&_global_quotient_bak, r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.51, 0(r13)
+	mov.w	r15, -42(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	#_global_reduce_bak, r12
+	mov.w	&_global_reduce_bak, r13
+	add.w	#-1, r13
+	mov.w	r13, &_global_reduce_bak
+	mov.w	#_global_quotient, r14
+	mov.w	#2, r13
+	mov.w	-42(r4), r11            ; 2-byte Folded Reload
+	mov.w	r15, -44(r4)            ; 2-byte Folded Spill
+	mov.w	r11, r15
+	mov.w	r13, -46(r4)            ; 2-byte Folded Spill
+	mov.w	r12, -48(r4)            ; 2-byte Folded Spill
+	call	#write_to_gbuf
+	mov.w	#_global_reduce, r14
+	mov.w	-48(r4), r15            ; 2-byte Folded Reload
+	mov.w	-46(r4), r13            ; 2-byte Folded Reload
+	call	#write_to_gbuf
+	mov.w	#_task_task_reduce_multiply, r15
+	call	#transition_to
+	add.w	#54, r1
+	pop.w	r9
+	pop.w	r10
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end16:
+	.size	task_reduce_quotient, .Lfunc_end16-task_reduce_quotient
+
+	.globl	task_reduce_multiply
+	.align	2
+	.type	task_reduce_multiply,@function
+task_reduce_multiply:                   ; @task_reduce_multiply
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	push.w	r10
+	push.w	r9
+	sub.w	#30, r1
+	mov.w	&_global_reduce, r12
+	add.w	#1, r12
+	mov.w	&_global_quotient, r13
+	mov.w	r1, r14
+	mov.w	r13, 4(r14)
+	mov.w	r12, 2(r14)
+	mov.w	#.L.str.52, 0(r14)
+	call	#printf
+	mov.w	&_global_reduce, r12
+	add.w	#-15, r12
+	mov.w	r12, -16(r4)
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.53, 0(r13)
+	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	#0, -8(r4)
+	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
+	jmp	.LBB17_1
+.LBB17_1:                               ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-8(r4), r12
+	mov.w	-16(r4), r13
+	cmp.w	r13, r12
+	jhs	.LBB17_4
+	jmp	.LBB17_2
+.LBB17_2:                               ; %for.body
+                                        ;   in Loop: Header=BB17_1 Depth=1
+	mov.w	-8(r4), r12
+	rla.w	r12
+	mov.w	#0, _global_product2(r12)
+	jmp	.LBB17_3
+.LBB17_3:                               ; %for.inc
+                                        ;   in Loop: Header=BB17_1 Depth=1
+	mov.w	-8(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -8(r4)
+	jmp	.LBB17_1
+.LBB17_4:                               ; %for.end
+	mov.w	#0, -14(r4)
+	mov.w	-16(r4), r12
+	mov.w	r12, -8(r4)
+	jmp	.LBB17_5
+.LBB17_5:                               ; %for.cond.3
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-8(r4), r12
+	cmp.w	#32, r12
+	jge	.LBB17_11
+	jmp	.LBB17_6
+.LBB17_6:                               ; %for.body.5
+                                        ;   in Loop: Header=BB17_5 Depth=1
+	mov.w	-14(r4), r12
+	mov.w	r12, -10(r4)
+	mov.w	-8(r4), r12
+	mov.w	-16(r4), r13
+	add.w	#16, r13
+	cmp.w	r13, r12
+	jhs	.LBB17_8
+	jmp	.LBB17_7
+.LBB17_7:                               ; %if.then
+                                        ;   in Loop: Header=BB17_5 Depth=1
+	mov.w	-8(r4), r12
+	mov.w	-16(r4), r13
+	sub.w	r13, r12
+	rla.w	r12
+	mov.w	_global_modulus(r12), r12
+	mov.w	r12, -12(r4)
+	mov.w	&_global_quotient, r15
+	mov.w	r12, r14
+	call	#__mulhi3hw_noint
+	mov.w	-10(r4), r12
+	add.w	r15, r12
+	mov.w	r12, -10(r4)
+	jmp	.LBB17_9
+.LBB17_8:                               ; %if.else
+                                        ;   in Loop: Header=BB17_5 Depth=1
+	mov.w	#0, -12(r4)
+	jmp	.LBB17_9
+.LBB17_9:                               ; %if.end
+                                        ;   in Loop: Header=BB17_5 Depth=1
+	mov.w	-8(r4), r12
+	mov.w	-16(r4), r13
+	mov.w	r12, r14
+	sub.w	r13, r14
+	mov.w	-12(r4), r13
+	mov.w	&_global_quotient, r15
+	mov.w	-14(r4), r11
+	mov.w	-10(r4), r10
+	mov.w	r1, r9
+	mov.w	r10, 12(r9)
+	mov.w	r12, 10(r9)
+	mov.w	r11, 8(r9)
+	mov.w	r15, 6(r9)
+	mov.w	r13, 4(r9)
+	mov.w	r14, 2(r9)
+	mov.w	#.L.str.54, 0(r9)
+	call	#printf
+	mov.b	-9(r4), r12
+	mov.w	r12, -14(r4)
+	mov.b	-10(r4), r12
+	mov.w	r12, -10(r4)
+	mov.w	-8(r4), r13
+	rla.w	r13
+	mov.w	r12, _global_product2(r13)
+	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
+	jmp	.LBB17_10
+.LBB17_10:                              ; %for.inc.14
+                                        ;   in Loop: Header=BB17_5 Depth=1
+	mov.w	-8(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -8(r4)
+	jmp	.LBB17_5
+.LBB17_11:                              ; %for.end.16
+	mov.b	#1, &_global_print_which
+	mov.w	#_task_task_reduce_compare, &_global_next_task_print
+	mov.w	#_task_task_print_product, r15
+	call	#transition_to
+	add.w	#30, r1
+	pop.w	r9
+	pop.w	r10
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end17:
+	.size	task_reduce_multiply, .Lfunc_end17-task_reduce_multiply
+
+	.globl	task_reduce_compare
+	.align	2
+	.type	task_reduce_compare,@function
+task_reduce_compare:                    ; @task_reduce_compare
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	sub.w	#20, r1
+	mov.b	#61, -3(r4)
+	mov.w	r1, r12
+	mov.w	#.L.str.55, 0(r12)
+	call	#printf
+	mov.w	#31, -2(r4)
+	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	jmp	.LBB18_1
+.LBB18_1:                               ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	cmp.w	#0, r12
+	jl	.LBB18_9
+	jmp	.LBB18_2
+.LBB18_2:                               ; %for.body
+                                        ;   in Loop: Header=BB18_1 Depth=1
+	mov.w	-2(r4), r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product(r13), r14
+	mov.w	_global_product2(r13), r13
+	mov.w	r1, r15
+	mov.w	r13, 8(r15)
+	mov.w	r12, 6(r15)
+	mov.w	r14, 4(r15)
+	mov.w	r12, 2(r15)
+	mov.w	#.L.str.56, 0(r15)
+	call	#printf
+	mov.w	-2(r4), r12
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	_global_product2(r12), r12
+	cmp.w	r13, r12
+	mov.w	r15, -8(r4)             ; 2-byte Folded Spill
+	jhs	.LBB18_4
+	jmp	.LBB18_3
+.LBB18_3:                               ; %if.then
+	mov.b	#62, -3(r4)
+	jmp	.LBB18_9
+.LBB18_4:                               ; %if.else
+                                        ;   in Loop: Header=BB18_1 Depth=1
+	mov.w	-2(r4), r12
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	_global_product2(r12), r12
+	cmp.w	r12, r13
+	jhs	.LBB18_6
+	jmp	.LBB18_5
+.LBB18_5:                               ; %if.then.9
+	mov.b	#60, -3(r4)
+	jmp	.LBB18_9
+.LBB18_6:                               ; %if.end
+                                        ;   in Loop: Header=BB18_1 Depth=1
+	jmp	.LBB18_7
+.LBB18_7:                               ; %if.end.10
+                                        ;   in Loop: Header=BB18_1 Depth=1
+	jmp	.LBB18_8
+.LBB18_8:                               ; %for.inc
+                                        ;   in Loop: Header=BB18_1 Depth=1
+	mov.w	-2(r4), r12
+	add.w	#-1, r12
+	mov.w	r12, -2(r4)
+	jmp	.LBB18_1
+.LBB18_9:                               ; %for.end
+	mov.b	-3(r4), r12
+	sxt	r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.57, 0(r13)
+	call	#printf
+	mov.b	-3(r4), r14
+	cmp.b	#60, r14
+	mov.w	r15, -10(r4)            ; 2-byte Folded Spill
+	jne	.LBB18_11
+	jmp	.LBB18_10
+.LBB18_10:                              ; %if.then.15
+	mov.w	#_task_task_reduce_add, r15
+	call	#transition_to
+	jmp	.LBB18_12
+.LBB18_11:                              ; %if.else.16
+	mov.w	#_task_task_reduce_subtract, r15
+	call	#transition_to
+	jmp	.LBB18_12
+.LBB18_12:                              ; %if.end.17
+	add.w	#20, r1
+	pop.w	r4
+	ret
+.Lfunc_end18:
+	.size	task_reduce_compare, .Lfunc_end18-task_reduce_compare
+
+	.globl	task_reduce_add
+	.align	2
+	.type	task_reduce_add,@function
+task_reduce_add:                        ; @task_reduce_add
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	push.w	r10
+	push.w	r9
+	push.w	r8
+	sub.w	#64, r1
+	mov.w	&_global_reduce, r12
+	add.w	#-15, r12
+	mov.w	r12, -20(r4)
+	mov.w	&_global_reduce, r13
+	add.w	#1, r13
+	mov.w	r1, r14
+	mov.w	r12, 4(r14)
+	mov.w	r13, 2(r14)
+	mov.w	#.L.str.58, 0(r14)
+	call	#printf
+	mov.w	#0, -18(r4)
+	mov.w	-20(r4), r12
+	mov.w	r12, -10(r4)
+	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
+	jmp	.LBB19_1
+.LBB19_1:                               ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-10(r4), r12
+	cmp.w	#32, r12
+	jl	4
+	br	#.LBB19_19
+	jmp	.LBB19_2
+.LBB19_2:                               ; %for.body
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-10(r4), r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product_isDirty(r13), r13
+	mov.w	&_numBoots, r14
+	cmp.w	r14, r13
+	mov.w	r12, -24(r4)            ; 2-byte Folded Spill
+	jeq	.LBB19_4
+	jmp	.LBB19_3
+.LBB19_3:                               ; %for.body.split1
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-24(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	r13, _global_product_bak(r12)
+	jmp	.LBB19_4
+.LBB19_4:                               ; %for.body.split
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-24(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product_bak(r12), r12
+	mov.w	r12, -14(r4)
+	mov.w	-10(r4), r12
+	mov.w	-20(r4), r13
+	sub.w	r13, r12
+	mov.w	r12, -12(r4)
+	mov.w	-10(r4), r12
+	mov.w	-20(r4), r13
+	add.w	#16, r13
+	cmp.w	r13, r12
+	jhs	.LBB19_6
+	jmp	.LBB19_5
+.LBB19_5:                               ; %if.then
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-12(r4), r12
+	rla.w	r12
+	mov.w	_global_modulus(r12), r12
+	mov.w	r12, -16(r4)
+	jmp	.LBB19_7
+.LBB19_6:                               ; %if.else
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	#0, -16(r4)
+	mov.w	#0, -12(r4)
+	jmp	.LBB19_7
+.LBB19_7:                               ; %if.end
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-18(r4), r12
+	mov.w	-14(r4), r13
+	add.w	r13, r12
+	mov.w	-16(r4), r13
+	add.w	r13, r12
+	mov.w	-10(r4), r13
+	rla.w	r13
+	mov.w	r13, r14
+	add.w	#_global_product, r14
+	mov.w	r13, r15
+	add.w	#_global_product_bak, r15
+	mov.w	&_numBoots, r11
+	mov.w	r12, _global_product_bak(r13)
+	mov.w	r13, r12
+	add.w	#_global_product_isDirty, r12
+	mov.w	_global_product_isDirty(r13), r13
+	cmp.w	r11, r13
+	mov.w	r11, -26(r4)            ; 2-byte Folded Spill
+	mov.w	r12, -28(r4)            ; 2-byte Folded Spill
+	mov.w	r14, -30(r4)            ; 2-byte Folded Spill
+	mov.w	r15, -32(r4)            ; 2-byte Folded Spill
+	jeq	.LBB19_9
+	jmp	.LBB19_8
+.LBB19_8:                               ; %if.end.split2
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	#2, r13
+	mov.w	-32(r4), r15            ; 2-byte Folded Reload
+	mov.w	-30(r4), r14            ; 2-byte Folded Reload
+	call	#write_to_gbuf
+	mov.w	-28(r4), r13            ; 2-byte Folded Reload
+	mov.w	-26(r4), r14            ; 2-byte Folded Reload
+	mov.w	r14, 0(r13)
+	jmp	.LBB19_9
+.LBB19_9:                               ; %if.end.split
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-10(r4), r12
+	mov.w	r12, r13
+	mov.w	-14(r4), r14
+	mov.w	-12(r4), r15
+	mov.w	-16(r4), r11
+	mov.w	-18(r4), r10
+	mov.w	r12, r9
+	rla.w	r9
+	mov.w	_global_product_isDirty(r9), r9
+	mov.w	&_numBoots, r8
+	cmp.w	r8, r9
+	mov.w	r12, -34(r4)            ; 2-byte Folded Spill
+	mov.w	r13, -36(r4)            ; 2-byte Folded Spill
+	mov.w	r14, -38(r4)            ; 2-byte Folded Spill
+	mov.w	r15, -40(r4)            ; 2-byte Folded Spill
+	mov.w	r11, -42(r4)            ; 2-byte Folded Spill
+	mov.w	r10, -44(r4)            ; 2-byte Folded Spill
+	jeq	.LBB19_11
+	jmp	.LBB19_10
+.LBB19_10:                              ; %if.end.split.split3
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-34(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	r13, _global_product_bak(r12)
+	jmp	.LBB19_11
+.LBB19_11:                              ; %if.end.split.split
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-34(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product_bak(r12), r12
+	mov.w	r1, r13
+	mov.w	r12, 12(r13)
+	mov.w	-44(r4), r12            ; 2-byte Folded Reload
+	mov.w	r12, 10(r13)
+	mov.w	-42(r4), r14            ; 2-byte Folded Reload
+	mov.w	r14, 8(r13)
+	mov.w	-40(r4), r15            ; 2-byte Folded Reload
+	mov.w	r15, 6(r13)
+	mov.w	-38(r4), r11            ; 2-byte Folded Reload
+	mov.w	r11, 4(r13)
+	mov.w	-36(r4), r10            ; 2-byte Folded Reload
+	mov.w	r10, 2(r13)
+	mov.w	#.L.str.59, 0(r13)
+	call	#printf
+	mov.w	-10(r4), r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product_isDirty(r13), r13
+	mov.w	&_numBoots, r14
+	cmp.w	r14, r13
+	mov.w	r15, -46(r4)            ; 2-byte Folded Spill
+	mov.w	r12, -48(r4)            ; 2-byte Folded Spill
+	jeq	.LBB19_13
+	jmp	.LBB19_12
+.LBB19_12:                              ; %if.end.split.split.split4
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-48(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	r13, _global_product_bak(r12)
+	jmp	.LBB19_13
+.LBB19_13:                              ; %if.end.split.split.split
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-48(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.b	_global_product_bak+1(r12), r12
+	mov.w	r12, -18(r4)
+	mov.w	-10(r4), r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product_isDirty(r13), r13
+	mov.w	&_numBoots, r14
+	cmp.w	r14, r13
+	mov.w	r12, -50(r4)            ; 2-byte Folded Spill
+	jeq	.LBB19_15
+	jmp	.LBB19_14
+.LBB19_14:                              ; %if.end.split.split.split.split5
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-50(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	r13, _global_product_bak(r12)
+	jmp	.LBB19_15
+.LBB19_15:                              ; %if.end.split.split.split.split
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-50(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	r12, r13
+	add.w	#_global_product, r13
+	mov.w	r12, r14
+	add.w	#_global_product_bak, r14
+	mov.b	_global_product_bak(r12), r15
+	mov.w	&_numBoots, r11
+	mov.w	r15, _global_product_bak(r12)
+	mov.w	r12, r15
+	add.w	#_global_product_isDirty, r15
+	mov.w	_global_product_isDirty(r12), r12
+	cmp.w	r11, r12
+	mov.w	r15, -52(r4)            ; 2-byte Folded Spill
+	mov.w	r13, -54(r4)            ; 2-byte Folded Spill
+	mov.w	r14, -56(r4)            ; 2-byte Folded Spill
+	mov.w	r11, -58(r4)            ; 2-byte Folded Spill
+	jeq	.LBB19_17
+	jmp	.LBB19_16
+.LBB19_16:                              ; %if.end.split.split.split.split.split6
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	#2, r13
+	mov.w	-56(r4), r15            ; 2-byte Folded Reload
+	mov.w	-54(r4), r14            ; 2-byte Folded Reload
+	call	#write_to_gbuf
+	mov.w	-52(r4), r13            ; 2-byte Folded Reload
+	mov.w	-58(r4), r14            ; 2-byte Folded Reload
+	mov.w	r14, 0(r13)
+	jmp	.LBB19_17
+.LBB19_17:                              ; %if.end.split.split.split.split.split
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	jmp	.LBB19_18
+.LBB19_18:                              ; %for.inc
+                                        ;   in Loop: Header=BB19_1 Depth=1
+	mov.w	-10(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -10(r4)
+	br	#.LBB19_1
+.LBB19_19:                              ; %for.end
+	mov.b	#0, &_global_print_which
+	mov.w	#_task_task_reduce_subtract, &_global_next_task_print
+	mov.w	#_task_task_print_product, r15
+	call	#transition_to
+	add.w	#64, r1
+	pop.w	r8
+	pop.w	r9
+	pop.w	r10
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end19:
+	.size	task_reduce_add, .Lfunc_end19-task_reduce_add
+
+	.globl	task_reduce_subtract
+	.align	2
+	.type	task_reduce_subtract,@function
+task_reduce_subtract:                   ; @task_reduce_subtract
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	push.w	r10
+	push.w	r9
+	push.w	r8
+	sub.w	#56, r1
+	mov.w	r1, r12
+	mov.w	#.L.str.60, 0(r12)
+	call	#printf
+	mov.w	&_global_reduce, r12
+	add.w	#-15, r12
+	mov.w	r12, -20(r4)
+	mov.w	&_global_reduce, r13
+	add.w	#1, r13
+	mov.w	r1, r14
+	mov.w	r12, 4(r14)
+	mov.w	r13, 2(r14)
+	mov.w	#.L.str.61, 0(r14)
+	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
+	call	#printf
+	mov.w	#0, -18(r4)
+	mov.w	#0, -10(r4)
+	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
+	jmp	.LBB20_1
+.LBB20_1:                               ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-10(r4), r12
+	cmp.w	#32, r12
+	jge	.LBB20_15
+	jmp	.LBB20_2
+.LBB20_2:                               ; %for.body
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-10(r4), r12
+	mov.w	r12, r13
+	rla.w	r13
+	mov.w	_global_product_isDirty(r13), r13
+	mov.w	&_numBoots, r14
+	cmp.w	r14, r13
+	mov.w	r12, -26(r4)            ; 2-byte Folded Spill
+	jeq	.LBB20_4
+	jmp	.LBB20_3
+.LBB20_3:                               ; %for.body.split1
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-26(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	r13, _global_product_bak(r12)
+	jmp	.LBB20_4
+.LBB20_4:                               ; %for.body.split
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-26(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product_bak(r12), r12
+	mov.w	r12, -12(r4)
+	mov.w	-10(r4), r12
+	mov.w	-20(r4), r13
+	cmp.w	r13, r12
+	jlo	.LBB20_13
+	jmp	.LBB20_5
+.LBB20_5:                               ; %if.then
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-10(r4), r12
+	rla.w	r12
+	mov.w	_global_product2(r12), r12
+	mov.w	r12, -16(r4)
+	mov.w	-18(r4), r13
+	add.w	r13, r12
+	mov.w	r12, -14(r4)
+	mov.w	-12(r4), r13
+	cmp.w	r12, r13
+	jhs	.LBB20_7
+	jmp	.LBB20_6
+.LBB20_6:                               ; %if.then.7
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-12(r4), r12
+	add.w	#256, r12
+	mov.w	r12, -12(r4)
+	mov.w	#1, -18(r4)
+	jmp	.LBB20_8
+.LBB20_7:                               ; %if.else
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	#0, -18(r4)
+	jmp	.LBB20_8
+.LBB20_8:                               ; %if.end
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-12(r4), r12
+	mov.w	-14(r4), r13
+	sub.w	r13, r12
+	mov.w	-10(r4), r13
+	rla.w	r13
+	mov.w	r13, r14
+	add.w	#_global_product, r14
+	mov.w	r13, r15
+	add.w	#_global_product_bak, r15
+	mov.w	&_numBoots, r11
+	mov.w	r12, _global_product_bak(r13)
+	mov.w	r13, r12
+	add.w	#_global_product_isDirty, r12
+	mov.w	_global_product_isDirty(r13), r13
+	cmp.w	r11, r13
+	mov.w	r11, -28(r4)            ; 2-byte Folded Spill
+	mov.w	r12, -30(r4)            ; 2-byte Folded Spill
+	mov.w	r14, -32(r4)            ; 2-byte Folded Spill
+	mov.w	r15, -34(r4)            ; 2-byte Folded Spill
+	jeq	.LBB20_10
+	jmp	.LBB20_9
+.LBB20_9:                               ; %if.end.split2
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	#2, r13
+	mov.w	-34(r4), r15            ; 2-byte Folded Reload
+	mov.w	-32(r4), r14            ; 2-byte Folded Reload
+	call	#write_to_gbuf
+	mov.w	-30(r4), r13            ; 2-byte Folded Reload
+	mov.w	-28(r4), r14            ; 2-byte Folded Reload
+	mov.w	r14, 0(r13)
+	jmp	.LBB20_10
+.LBB20_10:                              ; %if.end.split
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-10(r4), r12
+	mov.w	r12, r13
+	mov.w	-12(r4), r14
+	mov.w	r12, r15
+	mov.w	-16(r4), r11
+	mov.w	-18(r4), r10
+	mov.w	r12, r9
+	rla.w	r9
+	mov.w	_global_product_isDirty(r9), r9
+	mov.w	&_numBoots, r8
+	cmp.w	r8, r9
+	mov.w	r12, -36(r4)            ; 2-byte Folded Spill
+	mov.w	r13, -38(r4)            ; 2-byte Folded Spill
+	mov.w	r14, -40(r4)            ; 2-byte Folded Spill
+	mov.w	r15, -42(r4)            ; 2-byte Folded Spill
+	mov.w	r11, -44(r4)            ; 2-byte Folded Spill
+	mov.w	r10, -46(r4)            ; 2-byte Folded Spill
+	jeq	.LBB20_12
+	jmp	.LBB20_11
+.LBB20_11:                              ; %if.end.split.split3
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-36(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product(r12), r13
+	mov.w	r13, _global_product_bak(r12)
+	jmp	.LBB20_12
+.LBB20_12:                              ; %if.end.split.split
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-36(r4), r12            ; 2-byte Folded Reload
+	rla.w	r12
+	mov.w	_global_product_bak(r12), r12
+	mov.w	r1, r13
+	mov.w	r12, 12(r13)
+	mov.w	-46(r4), r12            ; 2-byte Folded Reload
+	mov.w	r12, 10(r13)
+	mov.w	-44(r4), r14            ; 2-byte Folded Reload
+	mov.w	r14, 8(r13)
+	mov.w	-42(r4), r15            ; 2-byte Folded Reload
+	mov.w	r15, 6(r13)
+	mov.w	-40(r4), r11            ; 2-byte Folded Reload
+	mov.w	r11, 4(r13)
+	mov.w	-38(r4), r10            ; 2-byte Folded Reload
+	mov.w	r10, 2(r13)
+	mov.w	#.L.str.62, 0(r13)
+	call	#printf
+	mov.w	r15, -48(r4)            ; 2-byte Folded Spill
+	jmp	.LBB20_13
+.LBB20_13:                              ; %if.end.13
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	jmp	.LBB20_14
+.LBB20_14:                              ; %for.inc
+                                        ;   in Loop: Header=BB20_1 Depth=1
+	mov.w	-10(r4), r12
+	add.w	#1, r12
+	mov.w	r12, -10(r4)
+	jmp	.LBB20_1
+.LBB20_15:                              ; %for.end
+	mov.b	#0, &_global_print_which
+	mov.w	&_global_reduce, r12
+	add.w	#1, r12
+	cmp.w	#17, r12
+	jlo	.LBB20_17
+	jmp	.LBB20_16
+.LBB20_16:                              ; %if.then.16
+	mov.w	#_task_task_reduce_quotient, &_global_next_task_print
+	jmp	.LBB20_18
+.LBB20_17:                              ; %if.else.17
+	mov.w	r1, r12
+	mov.w	#.L.str.63, 0(r12)
+	call	#printf
+	mov.w	&_global_next_task, r12
+	mov.w	r12, &_global_next_task_print
+	mov.w	r15, -50(r4)            ; 2-byte Folded Spill
+	jmp	.LBB20_18
+.LBB20_18:                              ; %if.end.19
+	mov.w	#_task_task_print_product, r15
+	call	#transition_to
+	add.w	#56, r1
+	pop.w	r8
+	pop.w	r9
+	pop.w	r10
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end20:
+	.size	task_reduce_subtract, .Lfunc_end20-task_reduce_subtract
+
+	.globl	task_print_product
+	.align	2
+	.type	task_print_product,@function
+task_print_product:                     ; @task_print_product
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	sub.w	#16, r1
+	mov.w	r1, r12
+	mov.w	#.L.str.64, 0(r12)
+	call	#printf
+	mov.w	#31, -4(r4)
+	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	jmp	.LBB21_1
+.LBB21_1:                               ; %for.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-4(r4), r12
+	cmp.w	#0, r12
+	jl	.LBB21_7
+	jmp	.LBB21_2
+.LBB21_2:                               ; %for.body
+                                        ;   in Loop: Header=BB21_1 Depth=1
+	mov.b	&_global_print_which, r12
+	bit.w	#1, r12
+	jeq	.LBB21_4
+	jmp	.LBB21_3
+.LBB21_3:                               ; %if.then
+                                        ;   in Loop: Header=BB21_1 Depth=1
+	mov.w	-4(r4), r12
+	rla.w	r12
+	mov.w	_global_product2(r12), r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.9, 0(r13)
+	call	#printf
+	mov.w	r15, -8(r4)             ; 2-byte Folded Spill
+	jmp	.LBB21_5
+.LBB21_4:                               ; %if.else
+                                        ;   in Loop: Header=BB21_1 Depth=1
+	mov.w	-4(r4), r12
+	rla.w	r12
+	mov.w	_global_product(r12), r12
+	mov.w	r1, r13
+	mov.w	r12, 2(r13)
+	mov.w	#.L.str.9, 0(r13)
+	call	#printf
+	mov.w	r15, -10(r4)            ; 2-byte Folded Spill
+	jmp	.LBB21_5
+.LBB21_5:                               ; %if.end
+                                        ;   in Loop: Header=BB21_1 Depth=1
+	jmp	.LBB21_6
+.LBB21_6:                               ; %for.inc
+                                        ;   in Loop: Header=BB21_1 Depth=1
+	mov.w	-4(r4), r12
+	add.w	#-1, r12
+	mov.w	r12, -4(r4)
+	jmp	.LBB21_1
+.LBB21_7:                               ; %for.end
+	mov.w	r1, r12
+	mov.w	#.L.str.11, 0(r12)
+	call	#printf
+	mov.w	&_global_next_task_print, r12
+	mov.w	r15, -12(r4)            ; 2-byte Folded Spill
+	mov.w	r12, r15
+	call	#transition_to
+	add.w	#16, r1
+	pop.w	r4
+	ret
+.Lfunc_end21:
+	.size	task_print_product, .Lfunc_end21-task_print_product
 
 	.globl	_entry_task
 	.align	2
@@ -921,8 +2425,8 @@ _entry_task:                            ; @_entry_task
 	call	#transition_to
 	pop.w	r4
 	ret
-.Lfunc_end14:
-	.size	_entry_task, .Lfunc_end14-_entry_task
+.Lfunc_end22:
+	.size	_entry_task, .Lfunc_end22-_entry_task
 
 	.globl	_init
 	.align	2
@@ -934,8 +2438,21 @@ _init:                                  ; @_init
 	call	#init
 	pop.w	r4
 	ret
-.Lfunc_end15:
-	.size	_init, .Lfunc_end15-_init
+.Lfunc_end23:
+	.size	_init, .Lfunc_end23-_init
+
+	.globl	clear_isDirty
+	.align	2
+	.type	clear_isDirty,@function
+clear_isDirty:                          ; @clear_isDirty
+; BB#0:                                 ; %entry
+	mov.w	#_global_product_isDirty, r15
+	mov.w	#0, r14
+	mov.w	#64, r13
+	call	#my_memset
+	ret
+.Lfunc_end24:
+	.size	clear_isDirty, .Lfunc_end24-clear_isDirty
 
 	.align	2
 	.type	init_hw,@function
@@ -950,28 +2467,8 @@ init_hw:                                ; @init_hw
 	call	#msp_clock_setup
 	pop.w	r4
 	ret
-.Lfunc_end16:
-	.size	init_hw, .Lfunc_end16-init_hw
-
-	.align	2
-	.type	acquire_sample,@function
-acquire_sample:                         ; @acquire_sample
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#6, r1
-	;DEBUG_VALUE: acquire_sample:prev_sample <- undef
-	mov.w	r15, r12
-	mov.w	r15, -2(r4)
-	add.w	#1, r15
-	and.w	#3, r15
-	mov.w	r15, -4(r4)
-	mov.w	r12, -6(r4)             ; 2-byte Folded Spill
-	add.w	#6, r1
-	pop.w	r4
-	ret
-.Lfunc_end17:
-	.size	acquire_sample, .Lfunc_end17-acquire_sample
+.Lfunc_end25:
+	.size	init_hw, .Lfunc_end25-init_hw
 
 	.globl	msp_watchdog_enable
 	.align	2
@@ -980,20 +2477,16 @@ msp_watchdog_enable:                    ; @msp_watchdog_enable
 ; BB#0:                                 ; %entry
 	push.w	r4
 	mov.w	r1, r4
-	sub.w	#2, r1
-	;DEBUG_VALUE: msp_watchdog_enable:bits <- undef
+	;DEBUG_VALUE: msp_watchdog_enable:bits <- R15
+	;DEBUG_VALUE: msp_watchdog_enable:bits <- R15
 	mov.b	r15, r12
-	mov.b	r12, -1(r4)
-	mov.b	-1(r4), r15
 	bis.w	#23048, r15
 	mov.w	r15, &0x015C
-	mov.b	-1(r4), r12
 	mov.b	r12, &watchdog_bits
-	add.w	#2, r1
 	pop.w	r4
 	ret
-.Lfunc_end18:
-	.size	msp_watchdog_enable, .Lfunc_end18-msp_watchdog_enable
+.Lfunc_end26:
+	.size	msp_watchdog_enable, .Lfunc_end26-msp_watchdog_enable
 
 	.globl	msp_watchdog_disable
 	.align	2
@@ -1005,8 +2498,8 @@ msp_watchdog_disable:                   ; @msp_watchdog_disable
 	mov.w	#23168, &0x015C
 	pop.w	r4
 	ret
-.Lfunc_end19:
-	.size	msp_watchdog_disable, .Lfunc_end19-msp_watchdog_disable
+.Lfunc_end27:
+	.size	msp_watchdog_disable, .Lfunc_end27-msp_watchdog_disable
 
 	.globl	msp_watchdog_kick
 	.align	2
@@ -1020,8 +2513,8 @@ msp_watchdog_kick:                      ; @msp_watchdog_kick
 	mov.w	r12, &0x015C
 	pop.w	r4
 	ret
-.Lfunc_end20:
-	.size	msp_watchdog_kick, .Lfunc_end20-msp_watchdog_kick
+.Lfunc_end28:
+	.size	msp_watchdog_kick, .Lfunc_end28-msp_watchdog_kick
 
 	.globl	memcpy
 	.align	2
@@ -1030,52 +2523,79 @@ memcpy:                                 ; @memcpy
 ; BB#0:                                 ; %entry
 	push.w	r4
 	mov.w	r1, r4
-	push.w	r11
-	push.w	r10
-	sub.w	#14, r1
-	;DEBUG_VALUE: memcpy:dest <- undef
-	;DEBUG_VALUE: memcpy:src <- undef
-	;DEBUG_VALUE: memcpy:n <- undef
+	sub.w	#8, r1
+	;DEBUG_VALUE: memcpy:dest <- R15
+	;DEBUG_VALUE: memcpy:src <- R14
+	;DEBUG_VALUE: memcpy:n <- R13
+	;DEBUG_VALUE: memcpy:n <- R13
+	;DEBUG_VALUE: memcpy:src <- R14
+	;DEBUG_VALUE: memcpy:dest <- R15
+	;DEBUG_VALUE: memcpy:i <- 0
 	mov.w	r13, r12
-	mov.w	r14, r11
-	mov.w	r15, r10
-	mov.w	r15, -6(r4)
-	mov.w	r14, -8(r4)
-	mov.w	r13, -10(r4)
-	mov.w	#0, -12(r4)
-	mov.w	r12, -14(r4)            ; 2-byte Folded Spill
-	mov.w	r11, -16(r4)            ; 2-byte Folded Spill
-	mov.w	r10, -18(r4)            ; 2-byte Folded Spill
-	jmp	.LBB21_1
-.LBB21_1:                               ; %while.cond
+	;DEBUG_VALUE: memcpy:src <- R14
+	;DEBUG_VALUE: memcpy:dest <- R15
+	cmp.w	#0, r13
+	mov.w	r15, -2(r4)             ; 2-byte Folded Spill
+	;DEBUG_VALUE: memcpy:dest <- [FP+-2]
+	mov.w	r12, -4(r4)             ; 2-byte Folded Spill
+	mov.w	r14, -6(r4)             ; 2-byte Folded Spill
+	;DEBUG_VALUE: memcpy:src <- [FP+-6]
+	jeq	.LBB29_4
+	jmp	.LBB29_1
+.LBB29_1:                               ; %while.body.preheader
+	mov.w	#0, r12
+	mov.w	r12, -8(r4)             ; 2-byte Folded Spill
+	jmp	.LBB29_2
+.LBB29_2:                               ; %while.body
                                         ; =>This Inner Loop Header: Depth=1
-	mov.w	-12(r4), r12
-	mov.w	-10(r4), r13
-	cmp.w	r13, r12
-	jhs	.LBB21_3
-	jmp	.LBB21_2
-.LBB21_2:                               ; %while.body
-                                        ;   in Loop: Header=BB21_1 Depth=1
-	mov.w	-8(r4), r12
-	mov.w	-12(r4), r13
-	add.w	r13, r12
-	mov.b	0(r12), r14
-	mov.w	-6(r4), r12
-	add.w	r13, r12
-	mov.b	r14, 0(r12)
-	mov.w	-12(r4), r12
+	mov.w	-8(r4), r12             ; 2-byte Folded Reload
+	mov.w	-6(r4), r13             ; 2-byte Folded Reload
+	add.w	r12, r13
+	mov.b	0(r13), r14
+	mov.w	-2(r4), r13             ; 2-byte Folded Reload
+	add.w	r12, r13
+	mov.b	r14, 0(r13)
 	add.w	#1, r12
-	mov.w	r12, -12(r4)
-	jmp	.LBB21_1
-.LBB21_3:                               ; %while.end
-	mov.w	-6(r4), r15
-	add.w	#14, r1
-	pop.w	r10
-	pop.w	r11
+	;DEBUG_VALUE: memcpy:i <- R12
+	mov.w	-4(r4), r13             ; 2-byte Folded Reload
+	cmp.w	r13, r12
+	mov.w	r12, -8(r4)             ; 2-byte Folded Spill
+	jne	.LBB29_2
+	jmp	.LBB29_3
+.LBB29_3:                               ; %while.end.loopexit
+	jmp	.LBB29_4
+.LBB29_4:                               ; %while.end
+	mov.w	-2(r4), r15             ; 2-byte Folded Reload
+	add.w	#8, r1
 	pop.w	r4
 	ret
-.Lfunc_end21:
-	.size	memcpy, .Lfunc_end21-memcpy
+.Lfunc_end29:
+	.size	memcpy, .Lfunc_end29-memcpy
+
+	.globl	my_memset
+	.align	2
+	.type	my_memset,@function
+my_memset:                              ; @my_memset
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	;DEBUG_VALUE: my_memset:s <- R15
+	;DEBUG_VALUE: my_memset:c <- R14
+	;DEBUG_VALUE: my_memset:n <- R13
+	;APP
+	mov r15, r12
+add r15, r13
+cmp r13, r12
+jz $+10
+mov.b r14, 0(r12)
+inc r12
+jmp $-10
+
+	;NO_APP
+	pop.w	r4
+	ret
+.Lfunc_end30:
+	.size	my_memset, .Lfunc_end30-my_memset
 
 	.globl	msp_clock_setup
 	.align	2
@@ -1090,8 +2610,517 @@ msp_clock_setup:                        ; @msp_clock_setup
 	mov.w	#0, &0x0166
 	pop.w	r4
 	ret
-.Lfunc_end22:
-	.size	msp_clock_setup, .Lfunc_end22-msp_clock_setup
+.Lfunc_end31:
+	.size	msp_clock_setup, .Lfunc_end31-msp_clock_setup
+
+	.globl	mult16
+	.align	2
+	.type	mult16,@function
+mult16:                                 ; @mult16
+; BB#0:                                 ; %entry
+	;APP
+	MOV R15, &0x04C0
+MOV R14, &0x04C8
+MOV &0x04CA, R14
+MOV &0x04CC, R15
+RET
+
+	;NO_APP
+.Lfunc_end32:
+	.size	mult16, .Lfunc_end32-mult16
+
+	.globl	sqrt16
+	.align	2
+	.type	sqrt16,@function
+sqrt16:                                 ; @sqrt16
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	sub.w	#30, r1
+	;DEBUG_VALUE: sqrt16:x <- undef
+	mov.w	r15, r12
+	mov.w	r14, r13
+	mov.w	r15, -6(r4)
+	mov.w	r14, -8(r4)
+	mov.w	#-1, -10(r4)
+	mov.w	#0, -12(r4)
+	mov.w	-10(r4), r14
+	clrc
+	rrc.w	r14
+	mov.w	r14, -14(r4)
+	mov.w	#0, -18(r4)
+	mov.w	#0, -20(r4)
+	mov.w	r13, -22(r4)            ; 2-byte Folded Spill
+	mov.w	r12, -24(r4)            ; 2-byte Folded Spill
+	jmp	.LBB33_1
+.LBB33_1:                               ; %while.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-20(r4), r12
+	mov.w	-18(r4), r13
+	mov.w	-8(r4), r14
+	mov.w	-6(r4), r15
+	mov.b	#0, r11
+	xor.w	r15, r13
+	xor.w	r14, r12
+	bis.w	r13, r12
+	cmp.w	#0, r12
+	mov.b	r11, -25(r4)            ; 1-byte Folded Spill
+	jeq	.LBB33_3
+	jmp	.LBB33_2
+.LBB33_2:                               ; %land.rhs
+                                        ;   in Loop: Header=BB33_1 Depth=1
+	mov.w	-10(r4), r12
+	mov.w	-12(r4), r13
+	sub.w	r13, r12
+	cmp.w	#2, r12
+	mov.w	r2, r12
+	and.w	#1, r12
+	mov.b	r12, r14
+	mov.b	r14, -25(r4)            ; 1-byte Folded Spill
+	jmp	.LBB33_3
+.LBB33_3:                               ; %land.end
+                                        ;   in Loop: Header=BB33_1 Depth=1
+	mov.b	-25(r4), r12            ; 1-byte Folded Reload
+	mov.b	r12, r13
+	bit.w	#1, r13
+	jeq	.LBB33_10
+	jmp	.LBB33_4
+.LBB33_4:                               ; %while.body
+                                        ;   in Loop: Header=BB33_1 Depth=1
+	mov.w	-10(r4), r12
+	mov.w	-12(r4), r13
+	mov.w	#0, r14
+	add.w	r13, r12
+	addc.w	#0, r14
+	clrc
+	rrc.w	r12
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	rla.w	r14
+	bis.w	r14, r12
+	mov.w	r12, -14(r4)
+	mov.w	r12, r15
+	mov.w	r12, r14
+	call	#mult16
+	mov.w	r15, -18(r4)
+	mov.w	r14, -20(r4)
+	mov.w	-8(r4), r12
+	mov.w	-6(r4), r13
+	cmp.w	r13, r15
+	mov.w	r2, r11
+	and.w	#1, r11
+	cmp.w	r12, r14
+	mov.w	r2, r12
+	and.w	#1, r12
+	cmp.w	r13, r15
+	mov.w	r11, -28(r4)            ; 2-byte Folded Spill
+	mov.w	r12, -30(r4)            ; 2-byte Folded Spill
+	jeq	.LBB33_6
+; BB#5:                                 ; %while.body
+                                        ;   in Loop: Header=BB33_1 Depth=1
+	mov.w	-28(r4), r12            ; 2-byte Folded Reload
+	mov.w	r12, -30(r4)            ; 2-byte Folded Spill
+.LBB33_6:                               ; %while.body
+                                        ;   in Loop: Header=BB33_1 Depth=1
+	mov.w	-30(r4), r12            ; 2-byte Folded Reload
+	bit.w	#1, r12
+	jne	.LBB33_8
+	jmp	.LBB33_7
+.LBB33_7:                               ; %if.then
+                                        ;   in Loop: Header=BB33_1 Depth=1
+	mov.w	-14(r4), r12
+	mov.w	r12, -12(r4)
+	jmp	.LBB33_9
+.LBB33_8:                               ; %if.else
+                                        ;   in Loop: Header=BB33_1 Depth=1
+	mov.w	-14(r4), r12
+	mov.w	r12, -10(r4)
+	jmp	.LBB33_9
+.LBB33_9:                               ; %if.end
+                                        ;   in Loop: Header=BB33_1 Depth=1
+	jmp	.LBB33_1
+.LBB33_10:                              ; %while.end
+	mov.w	-14(r4), r15
+	add.w	#30, r1
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end33:
+	.size	sqrt16, .Lfunc_end33-sqrt16
+
+	.globl	udivmodhi4
+	.align	2
+	.type	udivmodhi4,@function
+udivmodhi4:                             ; @udivmodhi4
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	push.w	r10
+	sub.w	#20, r1
+	;DEBUG_VALUE: udivmodhi4:num <- undef
+	;DEBUG_VALUE: udivmodhi4:den <- undef
+	;DEBUG_VALUE: udivmodhi4:modwanted <- undef
+	mov.w	r13, r12
+	mov.w	r14, r11
+	mov.w	r15, r10
+	mov.w	r15, -8(r4)
+	mov.w	r14, -10(r4)
+	mov.w	r13, -12(r4)
+	mov.w	#1, -14(r4)
+	mov.w	#0, -16(r4)
+	mov.w	r12, -18(r4)            ; 2-byte Folded Spill
+	mov.w	r11, -20(r4)            ; 2-byte Folded Spill
+	mov.w	r10, -22(r4)            ; 2-byte Folded Spill
+	jmp	.LBB34_1
+.LBB34_1:                               ; %while.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-10(r4), r12
+	mov.w	-8(r4), r13
+	mov.b	#0, r14
+	cmp.w	r13, r12
+	mov.b	r14, -23(r4)            ; 1-byte Folded Spill
+	jhs	.LBB34_4
+	jmp	.LBB34_2
+.LBB34_2:                               ; %land.lhs.true
+                                        ;   in Loop: Header=BB34_1 Depth=1
+	mov.w	-14(r4), r12
+	mov.b	#0, r13
+	cmp.w	#0, r12
+	mov.b	r13, -23(r4)            ; 1-byte Folded Spill
+	jeq	.LBB34_4
+	jmp	.LBB34_3
+.LBB34_3:                               ; %land.rhs
+                                        ;   in Loop: Header=BB34_1 Depth=1
+	mov.b	-9(r4), r12
+	bit.b	#-128, r12
+	mov.w	r2, r13
+	rra.w	r13
+	and.w	#1, r13
+	mov.b	r13, r12
+	mov.b	r12, -23(r4)            ; 1-byte Folded Spill
+	jmp	.LBB34_4
+.LBB34_4:                               ; %land.end
+                                        ;   in Loop: Header=BB34_1 Depth=1
+	mov.b	-23(r4), r12            ; 1-byte Folded Reload
+	mov.b	r12, r13
+	bit.w	#1, r13
+	jeq	.LBB34_6
+	jmp	.LBB34_5
+.LBB34_5:                               ; %while.body
+                                        ;   in Loop: Header=BB34_1 Depth=1
+	mov.w	-10(r4), r12
+	rla.w	r12
+	mov.w	r12, -10(r4)
+	mov.w	-14(r4), r12
+	rla.w	r12
+	mov.w	r12, -14(r4)
+	jmp	.LBB34_1
+.LBB34_6:                               ; %while.end
+	jmp	.LBB34_7
+.LBB34_7:                               ; %while.cond.3
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-14(r4), r12
+	cmp.w	#0, r12
+	jeq	.LBB34_11
+	jmp	.LBB34_8
+.LBB34_8:                               ; %while.body.5
+                                        ;   in Loop: Header=BB34_7 Depth=1
+	mov.w	-8(r4), r12
+	mov.w	-10(r4), r13
+	cmp.w	r13, r12
+	jlo	.LBB34_10
+	jmp	.LBB34_9
+.LBB34_9:                               ; %if.then
+                                        ;   in Loop: Header=BB34_7 Depth=1
+	mov.w	-10(r4), r12
+	mov.w	-8(r4), r13
+	sub.w	r12, r13
+	mov.w	r13, -8(r4)
+	mov.w	-14(r4), r12
+	mov.w	-16(r4), r13
+	bis.w	r12, r13
+	mov.w	r13, -16(r4)
+	jmp	.LBB34_10
+.LBB34_10:                              ; %if.end
+                                        ;   in Loop: Header=BB34_7 Depth=1
+	mov.w	-14(r4), r12
+	clrc
+	rrc.w	r12
+	mov.w	r12, -14(r4)
+	mov.w	-10(r4), r12
+	clrc
+	rrc.w	r12
+	mov.w	r12, -10(r4)
+	jmp	.LBB34_7
+.LBB34_11:                              ; %while.end.8
+	mov.w	-12(r4), r12
+	cmp.w	#0, r12
+	jeq	.LBB34_13
+	jmp	.LBB34_12
+.LBB34_12:                              ; %if.then.10
+	mov.w	-8(r4), r12
+	mov.w	r12, -6(r4)
+	jmp	.LBB34_14
+.LBB34_13:                              ; %if.end.11
+	mov.w	-16(r4), r12
+	mov.w	r12, -6(r4)
+	jmp	.LBB34_14
+.LBB34_14:                              ; %return
+	mov.w	-6(r4), r15
+	add.w	#20, r1
+	pop.w	r10
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end34:
+	.size	udivmodhi4, .Lfunc_end34-udivmodhi4
+
+	.globl	__divhi3
+	.align	2
+	.type	__divhi3,@function
+__divhi3:                               ; @__divhi3
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	sub.w	#12, r1
+	;DEBUG_VALUE: __divhi3:a <- undef
+	;DEBUG_VALUE: __divhi3:b <- undef
+	mov.w	r14, r12
+	mov.w	r15, r13
+	mov.w	r15, -2(r4)
+	mov.w	r14, -4(r4)
+	mov.w	#0, -6(r4)
+	mov.w	-2(r4), r14
+	cmp.w	#0, r14
+	mov.w	r12, -10(r4)            ; 2-byte Folded Spill
+	mov.w	r13, -12(r4)            ; 2-byte Folded Spill
+	jge	.LBB35_2
+	jmp	.LBB35_1
+.LBB35_1:                               ; %if.then
+	mov.w	-2(r4), r12
+	mov.w	#0, r13
+	sub.w	r12, r13
+	mov.w	r13, -2(r4)
+	mov.w	-6(r4), r12
+	cmp.w	#0, r12
+	mov.w	r2, r12
+	rra.w	r12
+	and.w	#1, r12
+	mov.w	r12, -6(r4)
+	jmp	.LBB35_2
+.LBB35_2:                               ; %if.end
+	mov.w	-4(r4), r12
+	cmp.w	#0, r12
+	jge	.LBB35_4
+	jmp	.LBB35_3
+.LBB35_3:                               ; %if.then.2
+	mov.w	-4(r4), r12
+	mov.w	#0, r13
+	sub.w	r12, r13
+	mov.w	r13, -4(r4)
+	mov.w	-6(r4), r12
+	cmp.w	#0, r12
+	mov.w	r2, r12
+	rra.w	r12
+	and.w	#1, r12
+	mov.w	r12, -6(r4)
+	jmp	.LBB35_4
+.LBB35_4:                               ; %if.end.7
+	mov.w	-2(r4), r15
+	mov.w	-4(r4), r14
+	mov.w	#0, r13
+	call	#udivmodhi4
+	mov.w	r15, -8(r4)
+	mov.w	-6(r4), r13
+	cmp.w	#0, r13
+	jeq	.LBB35_6
+	jmp	.LBB35_5
+.LBB35_5:                               ; %if.then.9
+	mov.w	-8(r4), r12
+	mov.w	#0, r13
+	sub.w	r12, r13
+	mov.w	r13, -8(r4)
+	jmp	.LBB35_6
+.LBB35_6:                               ; %if.end.11
+	mov.w	-8(r4), r15
+	add.w	#12, r1
+	pop.w	r4
+	ret
+.Lfunc_end35:
+	.size	__divhi3, .Lfunc_end35-__divhi3
+
+	.globl	__modhi3
+	.align	2
+	.type	__modhi3,@function
+__modhi3:                               ; @__modhi3
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	sub.w	#12, r1
+	;DEBUG_VALUE: __modhi3:a <- undef
+	;DEBUG_VALUE: __modhi3:b <- undef
+	mov.w	r14, r12
+	mov.w	r15, r13
+	mov.w	r15, -2(r4)
+	mov.w	r14, -4(r4)
+	mov.w	#0, -6(r4)
+	mov.w	-2(r4), r14
+	cmp.w	#0, r14
+	mov.w	r12, -10(r4)            ; 2-byte Folded Spill
+	mov.w	r13, -12(r4)            ; 2-byte Folded Spill
+	jge	.LBB36_2
+	jmp	.LBB36_1
+.LBB36_1:                               ; %if.then
+	mov.w	-2(r4), r12
+	mov.w	#0, r13
+	sub.w	r12, r13
+	mov.w	r13, -2(r4)
+	mov.w	#1, -6(r4)
+	jmp	.LBB36_2
+.LBB36_2:                               ; %if.end
+	mov.w	-4(r4), r12
+	cmp.w	#0, r12
+	jge	.LBB36_4
+	jmp	.LBB36_3
+.LBB36_3:                               ; %if.then.2
+	mov.w	-4(r4), r12
+	mov.w	#0, r13
+	sub.w	r12, r13
+	mov.w	r13, -4(r4)
+	jmp	.LBB36_4
+.LBB36_4:                               ; %if.end.4
+	mov.w	-2(r4), r15
+	mov.w	-4(r4), r14
+	mov.w	#1, r13
+	call	#udivmodhi4
+	mov.w	r15, -8(r4)
+	mov.w	-6(r4), r13
+	cmp.w	#0, r13
+	jeq	.LBB36_6
+	jmp	.LBB36_5
+.LBB36_5:                               ; %if.then.5
+	mov.w	-8(r4), r12
+	mov.w	#0, r13
+	sub.w	r12, r13
+	mov.w	r13, -8(r4)
+	jmp	.LBB36_6
+.LBB36_6:                               ; %if.end.7
+	mov.w	-8(r4), r15
+	add.w	#12, r1
+	pop.w	r4
+	ret
+.Lfunc_end36:
+	.size	__modhi3, .Lfunc_end36-__modhi3
+
+	.globl	__udivhi3
+	.align	2
+	.type	__udivhi3,@function
+__udivhi3:                              ; @__udivhi3
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	sub.w	#8, r1
+	;DEBUG_VALUE: __udivhi3:a <- undef
+	;DEBUG_VALUE: __udivhi3:b <- undef
+	mov.w	r14, r12
+	mov.w	r15, r13
+	mov.w	r15, -4(r4)
+	mov.w	r14, -6(r4)
+	mov.w	-4(r4), r15
+	mov.w	#0, r11
+	mov.w	r13, -8(r4)             ; 2-byte Folded Spill
+	mov.w	r11, r13
+	mov.w	r12, -10(r4)            ; 2-byte Folded Spill
+	call	#udivmodhi4
+	add.w	#8, r1
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end37:
+	.size	__udivhi3, .Lfunc_end37-__udivhi3
+
+	.globl	__umodhi3
+	.align	2
+	.type	__umodhi3,@function
+__umodhi3:                              ; @__umodhi3
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	push.w	r11
+	sub.w	#8, r1
+	;DEBUG_VALUE: __umodhi3:a <- undef
+	;DEBUG_VALUE: __umodhi3:b <- undef
+	mov.w	r14, r12
+	mov.w	r15, r13
+	mov.w	r15, -4(r4)
+	mov.w	r14, -6(r4)
+	mov.w	-4(r4), r15
+	mov.w	#1, r11
+	mov.w	r13, -8(r4)             ; 2-byte Folded Spill
+	mov.w	r11, r13
+	mov.w	r12, -10(r4)            ; 2-byte Folded Spill
+	call	#udivmodhi4
+	add.w	#8, r1
+	pop.w	r11
+	pop.w	r4
+	ret
+.Lfunc_end38:
+	.size	__umodhi3, .Lfunc_end38-__umodhi3
+
+	.globl	puts
+	.align	2
+	.type	puts,@function
+puts:                                   ; @puts
+; BB#0:                                 ; %entry
+	push.w	r4
+	mov.w	r1, r4
+	sub.w	#6, r1
+	;DEBUG_VALUE: puts:str <- undef
+	mov.w	r15, r12
+	mov.w	r15, -2(r4)
+	mov.w	r12, -4(r4)             ; 2-byte Folded Spill
+	jmp	.LBB39_1
+.LBB39_1:                               ; %while.cond
+                                        ; =>This Inner Loop Header: Depth=1
+	mov.w	-2(r4), r12
+	mov.b	0(r12), r13
+	cmp.b	#0, r13
+	jeq	.LBB39_3
+	jmp	.LBB39_2
+.LBB39_2:                               ; %while.body
+                                        ;   in Loop: Header=BB39_1 Depth=1
+	mov.w	-2(r4), r12
+	mov.w	r12, r13
+	add.w	#1, r13
+	mov.w	r13, -2(r4)
+	mov.b	0(r12), r12
+	sxt	r12
+	mov.w	r12, r15
+	call	#io_putchar
+	mov.w	r15, -6(r4)             ; 2-byte Folded Spill
+	jmp	.LBB39_1
+.LBB39_3:                               ; %while.end
+	mov.w	#0, r15
+	add.w	#6, r1
+	pop.w	r4
+	ret
+.Lfunc_end39:
+	.size	puts, .Lfunc_end39-puts
 
 	.globl	printf
 	.align	2
@@ -1107,10 +3136,10 @@ printf:                                 ; @printf
 	mov.w	r4, r12
 	add.w	#6, r12
 	mov.w	r12, -18(r4)
-	jmp	.LBB23_1
-.LBB23_1:                               ; %while.cond
+	jmp	.LBB40_1
+.LBB40_1:                               ; %while.cond
                                         ; =>This Loop Header: Depth=1
-                                        ;     Child Loop BB23_4 Depth 2
+                                        ;     Child Loop BB40_4 Depth 2
 	mov.w	-4(r4), r12
 	mov.w	r12, r13
 	add.w	#1, r13
@@ -1119,21 +3148,21 @@ printf:                                 ; @printf
 	mov.b	r14, -5(r4)
 	cmp.b	#0, r14
 	jne	4
-	br	#.LBB23_40
-	jmp	.LBB23_2
-.LBB23_2:                               ; %while.body
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	br	#.LBB40_40
+	jmp	.LBB40_2
+.LBB40_2:                               ; %while.body
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.b	-5(r4), r12
 	cmp.b	#37, r12
 	jeq	4
-	br	#.LBB23_37
-	jmp	.LBB23_3
-.LBB23_3:                               ; %if.then
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	br	#.LBB40_37
+	jmp	.LBB40_3
+.LBB40_3:                               ; %if.then
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	#0, -14(r4)
-	jmp	.LBB23_4
-.LBB23_4:                               ; %parse_fmt_char
-                                        ;   Parent Loop BB23_1 Depth=1
+	jmp	.LBB40_4
+.LBB40_4:                               ; %parse_fmt_char
+                                        ;   Parent Loop BB40_1 Depth=1
                                         ; =>  This Inner Loop Header: Depth=2
 	mov.w	-4(r4), r12
 	mov.w	r12, r13
@@ -1146,59 +3175,59 @@ printf:                                 ; @printf
 	cmp.w	#0, r12
 	mov.w	r12, -20(r4)            ; 2-byte Folded Spill
 	jne	4
-	br	#.LBB23_34
-	jmp	.LBB23_5
-.LBB23_5:                               ; %parse_fmt_char
-                                        ;   in Loop: Header=BB23_4 Depth=2
+	br	#.LBB40_34
+	jmp	.LBB40_5
+.LBB40_5:                               ; %parse_fmt_char
+                                        ;   in Loop: Header=BB40_4 Depth=2
 	mov.w	-20(r4), r12            ; 2-byte Folded Reload
 	cmp.w	#48, r12
 	jne	4
-	br	#.LBB23_33
-	jmp	.LBB23_6
-.LBB23_6:                               ; %parse_fmt_char
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	br	#.LBB40_33
+	jmp	.LBB40_6
+.LBB40_6:                               ; %parse_fmt_char
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-20(r4), r12            ; 2-byte Folded Reload
 	cmp.w	#99, r12
-	jeq	.LBB23_14
-	jmp	.LBB23_7
-.LBB23_7:                               ; %parse_fmt_char
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jeq	.LBB40_14
+	jmp	.LBB40_7
+.LBB40_7:                               ; %parse_fmt_char
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-20(r4), r12            ; 2-byte Folded Reload
 	cmp.w	#105, r12
-	jeq	.LBB23_15
-	jmp	.LBB23_8
-.LBB23_8:                               ; %parse_fmt_char
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jeq	.LBB40_15
+	jmp	.LBB40_8
+.LBB40_8:                               ; %parse_fmt_char
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-20(r4), r12            ; 2-byte Folded Reload
 	cmp.w	#108, r12
-	jeq	.LBB23_19
-	jmp	.LBB23_9
-.LBB23_9:                               ; %parse_fmt_char
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jeq	.LBB40_19
+	jmp	.LBB40_9
+.LBB40_9:                               ; %parse_fmt_char
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-20(r4), r12            ; 2-byte Folded Reload
 	cmp.w	#110, r12
-	jeq	.LBB23_19
-	jmp	.LBB23_10
-.LBB23_10:                              ; %parse_fmt_char
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jeq	.LBB40_19
+	jmp	.LBB40_10
+.LBB40_10:                              ; %parse_fmt_char
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-20(r4), r12            ; 2-byte Folded Reload
 	cmp.w	#115, r12
-	jeq	.LBB23_13
-	jmp	.LBB23_11
-.LBB23_11:                              ; %parse_fmt_char
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jeq	.LBB40_13
+	jmp	.LBB40_11
+.LBB40_11:                              ; %parse_fmt_char
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-20(r4), r12            ; 2-byte Folded Reload
 	cmp.w	#117, r12
-	jeq	.LBB23_15
-	jmp	.LBB23_12
-.LBB23_12:                              ; %parse_fmt_char
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jeq	.LBB40_15
+	jmp	.LBB40_12
+.LBB40_12:                              ; %parse_fmt_char
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-20(r4), r12            ; 2-byte Folded Reload
 	cmp.w	#120, r12
-	jeq	.LBB23_23
-	br	#.LBB23_35
-.LBB23_13:                              ; %sw.bb
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jeq	.LBB40_23
+	br	#.LBB40_35
+.LBB40_13:                              ; %sw.bb
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-18(r4), r12
 	add.w	#1, r12
 	and.w	#-2, r12
@@ -1208,9 +3237,9 @@ printf:                                 ; @printf
 	mov.w	0(r12), r15
 	call	#io_puts_no_newline
 	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
-	br	#.LBB23_36
-.LBB23_14:                              ; %sw.bb.5
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	br	#.LBB40_36
+.LBB40_14:                              ; %sw.bb.5
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-18(r4), r12
 	add.w	#1, r12
 	and.w	#-2, r12
@@ -1220,9 +3249,9 @@ printf:                                 ; @printf
 	mov.w	0(r12), r15
 	call	#io_putchar
 	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
-	jmp	.LBB23_36
-.LBB23_15:                              ; %sw.bb.7
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jmp	.LBB40_36
+.LBB40_15:                              ; %sw.bb.7
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-18(r4), r12
 	add.w	#1, r12
 	and.w	#-2, r12
@@ -1233,16 +3262,16 @@ printf:                                 ; @printf
 	mov.w	r12, -8(r4)
 	mov.b	-5(r4), r14
 	cmp.b	#105, r14
-	jne	.LBB23_18
-	jmp	.LBB23_16
-.LBB23_16:                              ; %land.lhs.true
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jne	.LBB40_18
+	jmp	.LBB40_16
+.LBB40_16:                              ; %land.lhs.true
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-8(r4), r12
 	cmp.w	#0, r12
-	jge	.LBB23_18
-	jmp	.LBB23_17
-.LBB23_17:                              ; %if.then.13
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jge	.LBB40_18
+	jmp	.LBB40_17
+.LBB40_17:                              ; %if.then.13
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-8(r4), r12
 	mov.w	#0, r13
 	sub.w	r12, r13
@@ -1250,18 +3279,18 @@ printf:                                 ; @printf
 	mov.w	#45, r15
 	call	#io_putchar
 	mov.w	r15, -26(r4)            ; 2-byte Folded Spill
-	jmp	.LBB23_18
-.LBB23_18:                              ; %if.end
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jmp	.LBB40_18
+.LBB40_18:                              ; %if.end
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-8(r4), r14
 	mov.w	#20, r12
 	add.w	#dv, r12
 	mov.w	#0, r15
 	mov.w	r12, r13
 	call	#xtoa
-	jmp	.LBB23_36
-.LBB23_19:                              ; %sw.bb.16
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jmp	.LBB40_36
+.LBB40_19:                              ; %sw.bb.16
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-18(r4), r12
 	add.w	#1, r12
 	and.w	#-2, r12
@@ -1278,16 +3307,16 @@ printf:                                 ; @printf
 	mov.w	r12, -12(r4)
 	mov.b	-5(r4), r15
 	cmp.b	#108, r15
-	jne	.LBB23_22
-	jmp	.LBB23_20
-.LBB23_20:                              ; %land.lhs.true.20
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jne	.LBB40_22
+	jmp	.LBB40_20
+.LBB40_20:                              ; %land.lhs.true.20
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-10(r4), r12
 	cmp.w	#0, r12
-	jge	.LBB23_22
-	jmp	.LBB23_21
-.LBB23_21:                              ; %if.then.23
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jge	.LBB40_22
+	jmp	.LBB40_21
+.LBB40_21:                              ; %if.then.23
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-12(r4), r12
 	mov.w	-10(r4), r13
 	mov.w	#0, r14
@@ -1299,16 +3328,16 @@ printf:                                 ; @printf
 	mov.w	#45, r15
 	call	#io_putchar
 	mov.w	r15, -28(r4)            ; 2-byte Folded Spill
-	jmp	.LBB23_22
-.LBB23_22:                              ; %if.end.26
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jmp	.LBB40_22
+.LBB40_22:                              ; %if.end.26
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-10(r4), r15
 	mov.w	-12(r4), r14
 	mov.w	#dv, r13
 	call	#xtoa
-	jmp	.LBB23_36
-.LBB23_23:                              ; %sw.bb.27
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jmp	.LBB40_36
+.LBB40_23:                              ; %sw.bb.27
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-18(r4), r12
 	add.w	#1, r12
 	and.w	#-2, r12
@@ -1331,21 +3360,21 @@ printf:                                 ; @printf
 	rra.w	r12
 	mov.w	r12, -16(r4)
 	cmp.w	#0, r12
-	jne	.LBB23_25
-	jmp	.LBB23_24
-.LBB23_24:                              ; %lor.lhs.false
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jne	.LBB40_25
+	jmp	.LBB40_24
+.LBB40_24:                              ; %lor.lhs.false
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-14(r4), r12
 	cmp.w	#4, r12
-	jl	.LBB23_26
-	jmp	.LBB23_25
-.LBB23_25:                              ; %if.then.32
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jl	.LBB40_26
+	jmp	.LBB40_25
+.LBB40_25:                              ; %if.then.32
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-16(r4), r15
 	call	#puth
-	jmp	.LBB23_26
-.LBB23_26:                              ; %if.end.33
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jmp	.LBB40_26
+.LBB40_26:                              ; %if.end.33
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-8(r4), r12
 	rra.w	r12
 	rra.w	r12
@@ -1357,21 +3386,21 @@ printf:                                 ; @printf
 	rra.w	r12
 	mov.w	r12, -16(r4)
 	cmp.w	#0, r12
-	jne	.LBB23_28
-	jmp	.LBB23_27
-.LBB23_27:                              ; %lor.lhs.false.37
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jne	.LBB40_28
+	jmp	.LBB40_27
+.LBB40_27:                              ; %lor.lhs.false.37
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-14(r4), r12
 	cmp.w	#3, r12
-	jl	.LBB23_29
-	jmp	.LBB23_28
-.LBB23_28:                              ; %if.then.40
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jl	.LBB40_29
+	jmp	.LBB40_28
+.LBB40_28:                              ; %if.then.40
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-16(r4), r15
 	call	#puth
-	jmp	.LBB23_29
-.LBB23_29:                              ; %if.end.41
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jmp	.LBB40_29
+.LBB40_29:                              ; %if.end.41
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-8(r4), r12
 	rra.w	r12
 	rra.w	r12
@@ -1379,26 +3408,26 @@ printf:                                 ; @printf
 	rra.w	r12
 	mov.w	r12, -16(r4)
 	cmp.w	#0, r12
-	jne	.LBB23_31
-	jmp	.LBB23_30
-.LBB23_30:                              ; %lor.lhs.false.45
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jne	.LBB40_31
+	jmp	.LBB40_30
+.LBB40_30:                              ; %lor.lhs.false.45
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-14(r4), r12
 	cmp.w	#2, r12
-	jl	.LBB23_32
-	jmp	.LBB23_31
-.LBB23_31:                              ; %if.then.48
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jl	.LBB40_32
+	jmp	.LBB40_31
+.LBB40_31:                              ; %if.then.48
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-16(r4), r15
 	call	#puth
-	jmp	.LBB23_32
-.LBB23_32:                              ; %if.end.49
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jmp	.LBB40_32
+.LBB40_32:                              ; %if.end.49
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.w	-8(r4), r15
 	call	#puth
-	jmp	.LBB23_36
-.LBB23_33:                              ; %sw.bb.50
-                                        ;   in Loop: Header=BB23_4 Depth=2
+	jmp	.LBB40_36
+.LBB40_33:                              ; %sw.bb.50
+                                        ;   in Loop: Header=BB40_4 Depth=2
 	mov.w	-4(r4), r12
 	mov.w	r12, r13
 	add.w	#1, r13
@@ -1409,40 +3438,40 @@ printf:                                 ; @printf
 	sxt	r12
 	add.w	#-48, r12
 	mov.w	r12, -14(r4)
-	br	#.LBB23_4
-.LBB23_34:                              ; %sw.bb.54
+	br	#.LBB40_4
+.LBB40_34:                              ; %sw.bb.54
 	mov.w	#0, -2(r4)
-	jmp	.LBB23_41
-.LBB23_35:                              ; %sw.default
-                                        ;   in Loop: Header=BB23_1 Depth=1
-	jmp	.LBB23_38
-.LBB23_36:                              ; %sw.epilog
-                                        ;   in Loop: Header=BB23_1 Depth=1
-	jmp	.LBB23_39
-.LBB23_37:                              ; %if.else
-                                        ;   in Loop: Header=BB23_1 Depth=1
-	jmp	.LBB23_38
-.LBB23_38:                              ; %bad_fmt
-                                        ;   in Loop: Header=BB23_1 Depth=1
+	jmp	.LBB40_41
+.LBB40_35:                              ; %sw.default
+                                        ;   in Loop: Header=BB40_1 Depth=1
+	jmp	.LBB40_38
+.LBB40_36:                              ; %sw.epilog
+                                        ;   in Loop: Header=BB40_1 Depth=1
+	jmp	.LBB40_39
+.LBB40_37:                              ; %if.else
+                                        ;   in Loop: Header=BB40_1 Depth=1
+	jmp	.LBB40_38
+.LBB40_38:                              ; %bad_fmt
+                                        ;   in Loop: Header=BB40_1 Depth=1
 	mov.b	-5(r4), r12
 	sxt	r12
 	mov.w	r12, r15
 	call	#io_putchar
 	mov.w	r15, -30(r4)            ; 2-byte Folded Spill
-	jmp	.LBB23_39
-.LBB23_39:                              ; %if.end.57
-                                        ;   in Loop: Header=BB23_1 Depth=1
-	br	#.LBB23_1
-.LBB23_40:                              ; %while.end
+	jmp	.LBB40_39
+.LBB40_39:                              ; %if.end.57
+                                        ;   in Loop: Header=BB40_1 Depth=1
+	br	#.LBB40_1
+.LBB40_40:                              ; %while.end
 	mov.w	#0, -2(r4)
-	jmp	.LBB23_41
-.LBB23_41:                              ; %return
+	jmp	.LBB40_41
+.LBB40_41:                              ; %return
 	mov.w	-2(r4), r15
 	add.w	#32, r1
 	pop.w	r4
 	ret
-.Lfunc_end23:
-	.size	printf, .Lfunc_end23-printf
+.Lfunc_end40:
+	.size	printf, .Lfunc_end40-printf
 
 	.align	2
 	.type	xtoa,@function
@@ -1469,11 +3498,11 @@ xtoa:                                   ; @xtoa
 	mov.w	r12, -22(r4)            ; 2-byte Folded Spill
 	mov.w	r10, -24(r4)            ; 2-byte Folded Spill
 	mov.w	r11, -26(r4)            ; 2-byte Folded Spill
-	jeq	.LBB24_15
-	jmp	.LBB24_1
-.LBB24_1:                               ; %if.then
-	jmp	.LBB24_2
-.LBB24_2:                               ; %while.cond
+	jeq	.LBB41_15
+	jmp	.LBB41_1
+.LBB41_1:                               ; %if.then
+	jmp	.LBB41_2
+.LBB41_2:                               ; %while.cond
                                         ; =>This Inner Loop Header: Depth=1
 	mov.w	-12(r4), r12
 	mov.w	-10(r4), r13
@@ -1489,28 +3518,28 @@ xtoa:                                   ; @xtoa
 	cmp.w	r14, r13
 	mov.w	r11, -28(r4)            ; 2-byte Folded Spill
 	mov.w	r12, -30(r4)            ; 2-byte Folded Spill
-	jeq	.LBB24_4
+	jeq	.LBB41_4
 ; BB#3:                                 ; %while.cond
-                                        ;   in Loop: Header=BB24_2 Depth=1
+                                        ;   in Loop: Header=BB41_2 Depth=1
 	mov.w	-28(r4), r12            ; 2-byte Folded Reload
 	mov.w	r12, -30(r4)            ; 2-byte Folded Spill
-.LBB24_4:                               ; %while.cond
-                                        ;   in Loop: Header=BB24_2 Depth=1
+.LBB41_4:                               ; %while.cond
+                                        ;   in Loop: Header=BB41_2 Depth=1
 	mov.w	-30(r4), r12            ; 2-byte Folded Reload
 	bit.w	#1, r12
-	jne	.LBB24_6
-	jmp	.LBB24_5
-.LBB24_5:                               ; %while.body
-                                        ;   in Loop: Header=BB24_2 Depth=1
+	jne	.LBB41_6
+	jmp	.LBB41_5
+.LBB41_5:                               ; %while.body
+                                        ;   in Loop: Header=BB41_2 Depth=1
 	mov.w	-14(r4), r12
 	add.w	#4, r12
 	mov.w	r12, -14(r4)
-	jmp	.LBB24_2
-.LBB24_6:                               ; %while.end
-	jmp	.LBB24_7
-.LBB24_7:                               ; %do.body
+	jmp	.LBB41_2
+.LBB41_6:                               ; %while.end
+	jmp	.LBB41_7
+.LBB41_7:                               ; %do.body
                                         ; =>This Loop Header: Depth=1
-                                        ;     Child Loop BB24_8 Depth 2
+                                        ;     Child Loop BB41_8 Depth 2
 	mov.w	-14(r4), r12
 	mov.w	r12, r13
 	add.w	#4, r13
@@ -1520,9 +3549,9 @@ xtoa:                                   ; @xtoa
 	mov.w	r12, -18(r4)
 	mov.w	r13, -20(r4)
 	mov.b	#48, -15(r4)
-	jmp	.LBB24_8
-.LBB24_8:                               ; %while.cond.2
-                                        ;   Parent Loop BB24_7 Depth=1
+	jmp	.LBB41_8
+.LBB41_8:                               ; %while.cond.2
+                                        ;   Parent Loop BB41_7 Depth=1
                                         ; =>  This Inner Loop Header: Depth=2
 	mov.w	-12(r4), r12
 	mov.w	-10(r4), r13
@@ -1539,19 +3568,19 @@ xtoa:                                   ; @xtoa
 	cmp.w	r15, r13
 	mov.w	r9, -32(r4)             ; 2-byte Folded Spill
 	mov.w	r10, -34(r4)            ; 2-byte Folded Spill
-	jeq	.LBB24_10
+	jeq	.LBB41_10
 ; BB#9:                                 ; %while.cond.2
-                                        ;   in Loop: Header=BB24_8 Depth=2
+                                        ;   in Loop: Header=BB41_8 Depth=2
 	mov.w	-32(r4), r12            ; 2-byte Folded Reload
 	mov.w	r12, -34(r4)            ; 2-byte Folded Spill
-.LBB24_10:                              ; %while.cond.2
-                                        ;   in Loop: Header=BB24_8 Depth=2
+.LBB41_10:                              ; %while.cond.2
+                                        ;   in Loop: Header=BB41_8 Depth=2
 	mov.w	-34(r4), r12            ; 2-byte Folded Reload
 	bit.w	#1, r12
-	jne	.LBB24_12
-	jmp	.LBB24_11
-.LBB24_11:                              ; %while.body.4
-                                        ;   in Loop: Header=BB24_8 Depth=2
+	jne	.LBB41_12
+	jmp	.LBB41_11
+.LBB41_11:                              ; %while.body.4
+                                        ;   in Loop: Header=BB41_8 Depth=2
 	mov.b	-15(r4), r12
 	add.b	#1, r12
 	mov.b	r12, -15(r4)
@@ -1563,37 +3592,37 @@ xtoa:                                   ; @xtoa
 	subc.w	r14, r11
 	mov.w	r11, -10(r4)
 	mov.w	r15, -12(r4)
-	jmp	.LBB24_8
-.LBB24_12:                              ; %while.end.5
-                                        ;   in Loop: Header=BB24_7 Depth=1
+	jmp	.LBB41_8
+.LBB41_12:                              ; %while.end.5
+                                        ;   in Loop: Header=BB41_7 Depth=1
 	mov.b	-15(r4), r12
 	sxt	r12
 	mov.w	r12, r15
 	call	#io_putchar
 	mov.w	r15, -36(r4)            ; 2-byte Folded Spill
-	jmp	.LBB24_13
-.LBB24_13:                              ; %do.cond
-                                        ;   in Loop: Header=BB24_7 Depth=1
+	jmp	.LBB41_13
+.LBB41_13:                              ; %do.cond
+                                        ;   in Loop: Header=BB41_7 Depth=1
 	mov.b	-20(r4), r12
 	bit.b	#1, r12
-	jeq	.LBB24_7
-	jmp	.LBB24_14
-.LBB24_14:                              ; %do.end
-	jmp	.LBB24_16
-.LBB24_15:                              ; %if.else
+	jeq	.LBB41_7
+	jmp	.LBB41_14
+.LBB41_14:                              ; %do.end
+	jmp	.LBB41_16
+.LBB41_15:                              ; %if.else
 	mov.w	#48, r15
 	call	#io_putchar
 	mov.w	r15, -38(r4)            ; 2-byte Folded Spill
-	jmp	.LBB24_16
-.LBB24_16:                              ; %if.end
+	jmp	.LBB41_16
+.LBB41_16:                              ; %if.end
 	add.w	#34, r1
 	pop.w	r9
 	pop.w	r10
 	pop.w	r11
 	pop.w	r4
 	ret
-.Lfunc_end24:
-	.size	xtoa, .Lfunc_end24-xtoa
+.Lfunc_end41:
+	.size	xtoa, .Lfunc_end41-xtoa
 
 	.align	2
 	.type	puth,@function
@@ -1618,8 +3647,8 @@ puth:                                   ; @puth
 	add.w	#8, r1
 	pop.w	r4
 	ret
-.Lfunc_end25:
-	.size	puth, .Lfunc_end25-puth
+.Lfunc_end42:
+	.size	puth, .Lfunc_end42-puth
 
 	.globl	task_prologue
 	.align	2
@@ -1628,7 +3657,22 @@ task_prologue:                          ; @task_prologue
 ; BB#0:                                 ; %entry
 	push.w	r4
 	mov.w	r1, r4
-	sub.w	#6, r1
+	sub.w	#8, r1
+	mov.w	&_numBoots, r12
+	cmp.w	#-1, r12
+	jne	.LBB43_2
+	jmp	.LBB43_1
+.LBB43_1:                               ; %if.then
+	call	#clear_isDirty
+	mov.w	&_numBoots, r12
+	add.w	#1, r12
+	mov.w	r12, &_numBoots
+	jmp	.LBB43_2
+.LBB43_2:                               ; %if.end
+	mov.w	&_numBoots, r12
+	add.w	#1, r12
+	mov.w	r12, &_numBoots
+	;DEBUG_VALUE: task_prologue:curtask <- [FP+-2]
 	mov.w	&curctx, r12
 	mov.w	4(r12), r12
 	mov.w	0(r12), r12
@@ -1638,65 +3682,65 @@ task_prologue:                          ; @task_prologue
 	mov.w	-2(r4), r13
 	mov.w	8(r13), r13
 	cmp.w	r13, r12
-	jeq	.LBB26_7
-	jmp	.LBB26_1
-.LBB26_1:                               ; %if.then
-	jmp	.LBB26_2
-.LBB26_2:                               ; %while.cond
+	jeq	.LBB43_7
+	jmp	.LBB43_3
+.LBB43_3:                               ; %if.then.3
+	jmp	.LBB43_4
+.LBB43_4:                               ; %while.cond
                                         ; =>This Inner Loop Header: Depth=1
 	mov.w	&gv_index, r12
 	mov.w	&num_dirty_gv, r13
 	cmp.w	r13, r12
-	jhs	.LBB26_6
-	jmp	.LBB26_3
-.LBB26_3:                               ; %while.body
-                                        ;   in Loop: Header=BB26_2 Depth=1
+	jhs	.LBB43_6
+	jmp	.LBB43_5
+.LBB43_5:                               ; %while.body
+                                        ;   in Loop: Header=BB43_4 Depth=1
 	;DEBUG_VALUE: w_data_dest <- [FP+-4]
-	mov.w	&gv_index, r12
-	rla.w	r12
-	mov.w	data_dest(r12), r12
+	mov.w	&data_dest_base, r12
+	mov.w	&gv_index, r13
+	rla.w	r13
+	add.w	r13, r12
+	mov.w	0(r12), r12
 	mov.w	r12, -4(r4)
-	cmp.w	#0, r12
-	jeq	.LBB26_5
-	jmp	.LBB26_4
-.LBB26_4:                               ; %if.then.3
-                                        ;   in Loop: Header=BB26_2 Depth=1
-	;DEBUG_VALUE: w_data_size <- [FP+-6]
-	mov.w	&gv_index, r12
-	rla.w	r12
-	mov.w	data_size(r12), r12
+	;DEBUG_VALUE: w_data_src <- [FP+-6]
+	mov.w	&data_src_base, r12
+	mov.w	&gv_index, r13
+	rla.w	r13
+	add.w	r13, r12
+	mov.w	0(r12), r12
 	mov.w	r12, -6(r4)
+	;DEBUG_VALUE: w_data_size <- [FP+-8]
+	mov.w	&data_size_base, r12
+	mov.w	&gv_index, r13
+	rla.w	r13
+	add.w	r13, r12
+	mov.w	0(r12), r12
+	mov.w	r12, -8(r4)
 	mov.w	-4(r4), r15
-	mov.w	&gv_index, r12
-	rla.w	r12
-	add.w	#data, r12
-	mov.w	-6(r4), r13
-	mov.w	r12, r14
+	mov.w	-6(r4), r14
+	mov.w	r12, r13
 	call	#memcpy
-	jmp	.LBB26_5
-.LBB26_5:                               ; %if.end
-                                        ;   in Loop: Header=BB26_2 Depth=1
 	mov.w	&gv_index, r12
 	add.w	#1, r12
 	mov.w	r12, &gv_index
-	jmp	.LBB26_2
-.LBB26_6:                               ; %while.end
+	jmp	.LBB43_4
+.LBB43_6:                               ; %while.end
 	mov.w	#0, &num_dirty_gv
 	mov.w	#0, &gv_index
 	mov.w	&curctx, r12
 	mov.w	2(r12), r12
 	mov.w	-2(r4), r13
 	mov.w	r12, 8(r13)
-	jmp	.LBB26_8
-.LBB26_7:                               ; %if.else
+	jmp	.LBB43_8
+.LBB43_7:                               ; %if.else
 	mov.w	#0, &num_dirty_gv
-	jmp	.LBB26_8
-.LBB26_8:                               ; %if.end.8
-	add.w	#6, r1
+	jmp	.LBB43_8
+.LBB43_8:                               ; %if.end.10
+	add.w	#8, r1
 	pop.w	r4
 	ret
-.Lfunc_end26:
-	.size	task_prologue, .Lfunc_end26-task_prologue
+.Lfunc_end43:
+	.size	task_prologue, .Lfunc_end43-task_prologue
 
 	.globl	transition_to
 	.align	2
@@ -1716,11 +3760,11 @@ transition_to:                          ; @transition_to
 	mov.w	r12, -6(r4)             ; 2-byte Folded Spill
 	mov.w	r13, -8(r4)             ; 2-byte Folded Spill
 	mov.w	r14, -10(r4)            ; 2-byte Folded Spill
-	jeq	.LBB27_2
+	jeq	.LBB44_2
 ; BB#1:                                 ; %entry
 	mov.w	-8(r4), r12             ; 2-byte Folded Reload
 	mov.w	r12, -10(r4)            ; 2-byte Folded Spill
-.LBB27_2:                               ; %entry
+.LBB44_2:                               ; %entry
 	mov.w	-10(r4), r12            ; 2-byte Folded Reload
 	mov.w	r12, -4(r4)
 	mov.w	-2(r4), r13
@@ -1753,90 +3797,8 @@ br r12
 	add.w	#10, r1
 	pop.w	r4
 	ret
-.Lfunc_end27:
-	.size	transition_to, .Lfunc_end27-transition_to
-
-	.globl	chan_in
-	.align	2
-	.type	chan_in,@function
-chan_in:                                ; @chan_in
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	push.w	r11
-	push.w	r10
-	sub.w	#24, r1
-	;DEBUG_VALUE: chan_in:var_size <- undef
-	;DEBUG_VALUE: chan_in:chan <- undef
-	;DEBUG_VALUE: chan_in:field_offset <- undef
-	mov.w	r13, r12
-	mov.w	r14, r11
-	mov.w	r15, r10
-	mov.w	r15, -6(r4)
-	mov.w	r14, -8(r4)
-	mov.w	r13, -10(r4)
-	mov.w	#0, -14(r4)
-	mov.w	-8(r4), r13
-	add.w	#2, r13
-	mov.w	r13, -18(r4)
-	mov.w	-8(r4), r13
-	mov.w	r13, -20(r4)
-	mov.w	-18(r4), r13
-	mov.w	-10(r4), r14
-	add.w	r14, r13
-	mov.w	r13, -22(r4)
-	mov.w	r13, -16(r4)
-	mov.w	r13, r15
-	mov.w	r12, -24(r4)            ; 2-byte Folded Spill
-	mov.w	r11, -26(r4)            ; 2-byte Folded Spill
-	mov.w	r10, -28(r4)            ; 2-byte Folded Spill
-	add.w	#24, r1
-	pop.w	r10
-	pop.w	r11
-	pop.w	r4
-	ret
-.Lfunc_end28:
-	.size	chan_in, .Lfunc_end28-chan_in
-
-	.globl	chan_out
-	.align	2
-	.type	chan_out,@function
-chan_out:                               ; @chan_out
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#20, r1
-	;DEBUG_VALUE: chan_out:value <- undef
-	;DEBUG_VALUE: chan_out:var_size <- undef
-	;DEBUG_VALUE: chan_out:chan <- undef
-	;DEBUG_VALUE: chan_out:field_offset <- undef
-	mov.w	10(r4), r12
-	mov.w	8(r4), r13
-	mov.w	6(r4), r14
-	mov.w	4(r4), r15
-	mov.w	r15, -2(r4)
-	mov.w	r14, -4(r4)
-	mov.w	r13, -6(r4)
-	mov.w	r12, -8(r4)
-	mov.w	-6(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -16(r4)
-	mov.w	-6(r4), r12
-	mov.w	r12, -18(r4)
-	mov.w	-16(r4), r12
-	mov.w	-8(r4), r13
-	add.w	r13, r12
-	mov.w	r12, -20(r4)
-	mov.w	r12, -14(r4)
-	mov.w	-2(r4), r14
-	mov.w	-4(r4), r13
-	mov.w	r12, r15
-	call	#memcpy
-	add.w	#20, r1
-	pop.w	r4
-	ret
-.Lfunc_end29:
-	.size	chan_out, .Lfunc_end29-chan_out
+.Lfunc_end44:
+	.size	transition_to, .Lfunc_end44-transition_to
 
 	.globl	write_to_gbuf
 	.align	2
@@ -1847,9 +3809,9 @@ write_to_gbuf:                          ; @write_to_gbuf
 	mov.w	r1, r4
 	push.w	r11
 	push.w	r10
-	sub.w	#18, r1
-	;DEBUG_VALUE: write_to_gbuf:value <- undef
-	;DEBUG_VALUE: write_to_gbuf:data_addr <- undef
+	sub.w	#12, r1
+	;DEBUG_VALUE: write_to_gbuf:data_src <- undef
+	;DEBUG_VALUE: write_to_gbuf:data_dest <- undef
 	;DEBUG_VALUE: write_to_gbuf:var_size <- undef
 	mov.w	r13, r12
 	mov.w	r14, r11
@@ -1857,180 +3819,36 @@ write_to_gbuf:                          ; @write_to_gbuf
 	mov.w	r15, -6(r4)
 	mov.w	r14, -8(r4)
 	mov.w	r13, -10(r4)
+	mov.w	&data_size_base, r14
+	mov.w	&num_dirty_gv, r15
+	rla.w	r15
+	add.w	r15, r14
+	mov.w	r13, 0(r14)
+	mov.w	-8(r4), r13
+	mov.w	&data_dest_base, r14
+	mov.w	&num_dirty_gv, r15
+	rla.w	r15
+	add.w	r15, r14
+	mov.w	r13, 0(r14)
+	mov.w	-6(r4), r13
+	mov.w	&data_src_base, r14
+	mov.w	&num_dirty_gv, r15
+	rla.w	r15
+	add.w	r15, r14
+	mov.w	r13, 0(r14)
 	mov.w	&num_dirty_gv, r13
-	rla.w	r13
-	add.w	#data, r13
-	mov.w	-6(r4), r14
-	mov.w	-10(r4), r15
-	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
-	mov.w	r13, r15
-	mov.w	-16(r4), r13            ; 2-byte Folded Reload
-	mov.w	r12, -18(r4)            ; 2-byte Folded Spill
-	mov.w	r11, -20(r4)            ; 2-byte Folded Spill
-	mov.w	r10, -22(r4)            ; 2-byte Folded Spill
-	call	#memcpy
-	mov.w	-10(r4), r12
-	mov.w	&num_dirty_gv, r13
-	rla.w	r13
-	mov.w	r12, data_size(r13)
-	mov.w	-8(r4), r12
-	mov.w	&num_dirty_gv, r13
-	rla.w	r13
-	mov.w	r12, data_dest(r13)
-	mov.w	-10(r4), r12
-	cmp.w	#3, r12
-	jlo	.LBB30_6
-	jmp	.LBB30_1
-.LBB30_1:                               ; %if.then
-	;DEBUG_VALUE: quotient <- [FP+-8]
-	mov.w	-10(r4), r12
-	add.w	#-1, r12
-	clrc
-	rrc.w	r12
-	add.w	#1, r12
-	mov.w	r12, -12(r4)
-	;DEBUG_VALUE: i <- [FP+-10]
-	mov.w	#1, -14(r4)
-	jmp	.LBB30_2
-.LBB30_2:                               ; %for.cond
-                                        ; =>This Inner Loop Header: Depth=1
-	mov.w	-14(r4), r12
-	mov.w	-12(r4), r13
-	cmp.w	r13, r12
-	jhs	.LBB30_5
-	jmp	.LBB30_3
-.LBB30_3:                               ; %for.body
-                                        ;   in Loop: Header=BB30_2 Depth=1
-	mov.w	&num_dirty_gv, r12
-	mov.w	-14(r4), r13
-	add.w	r13, r12
-	rla.w	r12
-	mov.w	#0, data_dest(r12)
-	jmp	.LBB30_4
-.LBB30_4:                               ; %for.inc
-                                        ;   in Loop: Header=BB30_2 Depth=1
-	mov.w	-14(r4), r12
-	add.w	#1, r12
-	mov.w	r12, -14(r4)
-	jmp	.LBB30_2
-.LBB30_5:                               ; %for.end
-	mov.w	-12(r4), r12
-	mov.w	&num_dirty_gv, r13
-	add.w	r12, r13
+	add.w	#1, r13
 	mov.w	r13, &num_dirty_gv
-	jmp	.LBB30_7
-.LBB30_6:                               ; %if.else
-	mov.w	&num_dirty_gv, r12
-	add.w	#1, r12
-	mov.w	r12, &num_dirty_gv
-	jmp	.LBB30_7
-.LBB30_7:                               ; %if.end
-	add.w	#18, r1
+	mov.w	r12, -12(r4)            ; 2-byte Folded Spill
+	mov.w	r11, -14(r4)            ; 2-byte Folded Spill
+	mov.w	r10, -16(r4)            ; 2-byte Folded Spill
+	add.w	#12, r1
 	pop.w	r10
 	pop.w	r11
 	pop.w	r4
 	ret
-.Lfunc_end30:
-	.size	write_to_gbuf, .Lfunc_end30-write_to_gbuf
-
-	.globl	chan_out_gbuf
-	.align	2
-	.type	chan_out_gbuf,@function
-chan_out_gbuf:                          ; @chan_out_gbuf
-; BB#0:                                 ; %entry
-	push.w	r4
-	mov.w	r1, r4
-	sub.w	#24, r1
-	;DEBUG_VALUE: chan_out_gbuf:value <- undef
-	;DEBUG_VALUE: chan_out_gbuf:var_size <- undef
-	;DEBUG_VALUE: chan_out_gbuf:chan <- undef
-	;DEBUG_VALUE: chan_out_gbuf:field_offset <- undef
-	mov.w	10(r4), r12
-	mov.w	8(r4), r13
-	mov.w	6(r4), r14
-	mov.w	4(r4), r15
-	mov.w	r15, -2(r4)
-	mov.w	r14, -4(r4)
-	mov.w	r13, -6(r4)
-	mov.w	r12, -8(r4)
-	mov.w	-6(r4), r12
-	add.w	#2, r12
-	mov.w	r12, -16(r4)
-	mov.w	-6(r4), r12
-	mov.w	r12, -18(r4)
-	mov.w	-16(r4), r12
-	mov.w	-8(r4), r13
-	add.w	r13, r12
-	mov.w	r12, -20(r4)
-	mov.w	&num_dirty_gv, r12
-	rla.w	r12
-	add.w	#data, r12
-	mov.w	-2(r4), r14
-	mov.w	-4(r4), r13
-	mov.w	r12, r15
-	call	#memcpy
-	mov.w	-4(r4), r12
-	mov.w	&num_dirty_gv, r13
-	rla.w	r13
-	mov.w	r12, data_size(r13)
-	mov.w	-20(r4), r12
-	mov.w	r12, -14(r4)
-	mov.w	&num_dirty_gv, r13
-	rla.w	r13
-	mov.w	r12, data_dest(r13)
-	mov.w	-4(r4), r12
-	cmp.w	#3, r12
-	jlo	.LBB31_6
-	jmp	.LBB31_1
-.LBB31_1:                               ; %if.then
-	;DEBUG_VALUE: quotient <- [FP+-22]
-	mov.w	-4(r4), r12
-	add.w	#-1, r12
-	clrc
-	rrc.w	r12
-	add.w	#1, r12
-	mov.w	r12, -22(r4)
-	;DEBUG_VALUE: i <- [FP+-24]
-	mov.w	#1, -24(r4)
-	jmp	.LBB31_2
-.LBB31_2:                               ; %for.cond
-                                        ; =>This Inner Loop Header: Depth=1
-	mov.w	-24(r4), r12
-	mov.w	-22(r4), r13
-	cmp.w	r13, r12
-	jhs	.LBB31_5
-	jmp	.LBB31_3
-.LBB31_3:                               ; %for.body
-                                        ;   in Loop: Header=BB31_2 Depth=1
-	mov.w	&num_dirty_gv, r12
-	mov.w	-24(r4), r13
-	add.w	r13, r12
-	rla.w	r12
-	mov.w	#0, data_dest(r12)
-	jmp	.LBB31_4
-.LBB31_4:                               ; %for.inc
-                                        ;   in Loop: Header=BB31_2 Depth=1
-	mov.w	-24(r4), r12
-	add.w	#1, r12
-	mov.w	r12, -24(r4)
-	jmp	.LBB31_2
-.LBB31_5:                               ; %for.end
-	mov.w	-22(r4), r12
-	mov.w	&num_dirty_gv, r13
-	add.w	r12, r13
-	mov.w	r13, &num_dirty_gv
-	jmp	.LBB31_7
-.LBB31_6:                               ; %if.else
-	mov.w	&num_dirty_gv, r12
-	add.w	#1, r12
-	mov.w	r12, &num_dirty_gv
-	jmp	.LBB31_7
-.LBB31_7:                               ; %if.end
-	add.w	#24, r1
-	pop.w	r4
-	ret
-.Lfunc_end31:
-	.size	chan_out_gbuf, .Lfunc_end31-chan_out_gbuf
+.Lfunc_end45:
+	.size	write_to_gbuf, .Lfunc_end45-write_to_gbuf
 
 	.globl	main
 	.align	2
@@ -2042,9 +3860,6 @@ main:                                   ; @main
 	sub.w	#2, r1
 	mov.w	#0, -2(r4)
 	call	#_init
-	mov.w	&_numBoots, r12
-	add.w	#1, r12
-	mov.w	r12, &_numBoots
 	call	#task_prologue
 	mov.w	&curctx, r12
 	mov.w	0(r12), r12
@@ -2057,8 +3872,8 @@ main:                                   ; @main
 	add.w	#2, r1
 	pop.w	r4
 	ret
-.Lfunc_end32:
-	.size	main, .Lfunc_end32-main
+.Lfunc_end46:
+	.size	main, .Lfunc_end46-main
 
 	.type	overflow,@object        ; @overflow
 	.section	.bss,"aw",@nobits
@@ -2088,238 +3903,409 @@ _task_task_init:
 	.asciz	"task_init\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
 	.size	_task_task_init, 42
 
-	.type	_task_task_init_dict,@object ; @_task_task_init_dict
-	.globl	_task_task_init_dict
+	.type	_task_task_pad,@object  ; @_task_task_pad
+	.globl	_task_task_pad
 	.align	1
-_task_task_init_dict:
-	.short	task_init_dict
+_task_task_pad:
+	.short	task_pad
 	.long	4                       ; 0x4
 	.short	2                       ; 0x2
 	.short	0                       ; 0x0
-	.asciz	"task_init_dict\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_init_dict, 42
+	.asciz	"task_pad\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_pad, 42
 
-	.type	_task_task_sample,@object ; @_task_task_sample
-	.globl	_task_task_sample
+	.type	_task_task_exp,@object  ; @_task_task_exp
+	.globl	_task_task_exp
 	.align	1
-_task_task_sample:
-	.short	task_sample
+_task_task_exp:
+	.short	task_exp
 	.long	8                       ; 0x8
 	.short	3                       ; 0x3
 	.short	0                       ; 0x0
-	.asciz	"task_sample\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_sample, 42
+	.asciz	"task_exp\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_exp, 42
 
-	.type	_task_task_measure_temp,@object ; @_task_task_measure_temp
-	.globl	_task_task_measure_temp
+	.type	_task_task_mult_block,@object ; @_task_task_mult_block
+	.globl	_task_task_mult_block
 	.align	1
-_task_task_measure_temp:
-	.short	task_measure_temp
+_task_task_mult_block:
+	.short	task_mult_block
 	.long	16                      ; 0x10
 	.short	4                       ; 0x4
 	.short	0                       ; 0x0
-	.asciz	"task_measure_temp\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_measure_temp, 42
+	.asciz	"task_mult_block\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_mult_block, 42
 
-	.type	_task_task_letterize,@object ; @_task_task_letterize
-	.globl	_task_task_letterize
+	.type	_task_task_mult_block_get_result,@object ; @_task_task_mult_block_get_result
+	.globl	_task_task_mult_block_get_result
 	.align	1
-_task_task_letterize:
-	.short	task_letterize
+_task_task_mult_block_get_result:
+	.short	task_mult_block_get_result
 	.long	32                      ; 0x20
 	.short	5                       ; 0x5
 	.short	0                       ; 0x0
-	.asciz	"task_letterize\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_letterize, 42
+	.asciz	"task_mult_block_get_result\000\000\000\000\000"
+	.size	_task_task_mult_block_get_result, 42
 
-	.type	_task_task_compress,@object ; @_task_task_compress
-	.globl	_task_task_compress
+	.type	_task_task_square_base,@object ; @_task_task_square_base
+	.globl	_task_task_square_base
 	.align	1
-_task_task_compress:
-	.short	task_compress
+_task_task_square_base:
+	.short	task_square_base
 	.long	64                      ; 0x40
 	.short	6                       ; 0x6
 	.short	0                       ; 0x0
-	.asciz	"task_compress\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_compress, 42
+	.asciz	"task_square_base\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_square_base, 42
 
-	.type	_task_task_find_sibling,@object ; @_task_task_find_sibling
-	.globl	_task_task_find_sibling
+	.type	_task_task_square_base_get_result,@object ; @_task_task_square_base_get_result
+	.globl	_task_task_square_base_get_result
 	.align	1
-_task_task_find_sibling:
-	.short	task_find_sibling
+_task_task_square_base_get_result:
+	.short	task_square_base_get_result
 	.long	128                     ; 0x80
 	.short	7                       ; 0x7
 	.short	0                       ; 0x0
-	.asciz	"task_find_sibling\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_find_sibling, 42
+	.asciz	"task_square_base_get_result\000\000\000\000"
+	.size	_task_task_square_base_get_result, 42
 
-	.type	_task_task_add_node,@object ; @_task_task_add_node
-	.globl	_task_task_add_node
+	.type	_task_task_print_cyphertext,@object ; @_task_task_print_cyphertext
+	.globl	_task_task_print_cyphertext
 	.align	1
-_task_task_add_node:
-	.short	task_add_node
+_task_task_print_cyphertext:
+	.short	task_print_cyphertext
 	.long	256                     ; 0x100
 	.short	8                       ; 0x8
 	.short	0                       ; 0x0
-	.asciz	"task_add_node\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_add_node, 42
+	.asciz	"task_print_cyphertext\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_print_cyphertext, 42
 
-	.type	_task_task_add_insert,@object ; @_task_task_add_insert
-	.globl	_task_task_add_insert
+	.type	_task_task_mult_mod,@object ; @_task_task_mult_mod
+	.globl	_task_task_mult_mod
 	.align	1
-_task_task_add_insert:
-	.short	task_add_insert
+_task_task_mult_mod:
+	.short	task_mult_mod
 	.long	512                     ; 0x200
 	.short	9                       ; 0x9
 	.short	0                       ; 0x0
-	.asciz	"task_add_insert\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_add_insert, 42
+	.asciz	"task_mult_mod\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_mult_mod, 42
 
-	.type	_task_task_append_compressed,@object ; @_task_task_append_compressed
-	.globl	_task_task_append_compressed
+	.type	_task_task_mult,@object ; @_task_task_mult
+	.globl	_task_task_mult
 	.align	1
-_task_task_append_compressed:
-	.short	task_append_compressed
+_task_task_mult:
+	.short	task_mult
 	.long	1024                    ; 0x400
 	.short	10                      ; 0xa
 	.short	0                       ; 0x0
-	.asciz	"task_append_compressed\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_append_compressed, 42
+	.asciz	"task_mult\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_mult, 42
 
-	.type	_task_task_print,@object ; @_task_task_print
-	.globl	_task_task_print
+	.type	_task_task_reduce_digits,@object ; @_task_task_reduce_digits
+	.globl	_task_task_reduce_digits
 	.align	1
-_task_task_print:
-	.short	task_print
+_task_task_reduce_digits:
+	.short	task_reduce_digits
 	.long	2048                    ; 0x800
 	.short	11                      ; 0xb
 	.short	0                       ; 0x0
-	.asciz	"task_print\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_print, 42
+	.asciz	"task_reduce_digits\000\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_reduce_digits, 42
 
-	.type	_task_task_done,@object ; @_task_task_done
-	.globl	_task_task_done
+	.type	_task_task_reduce_normalizable,@object ; @_task_task_reduce_normalizable
+	.globl	_task_task_reduce_normalizable
 	.align	1
-_task_task_done:
-	.short	task_done
+_task_task_reduce_normalizable:
+	.short	task_reduce_normalizable
 	.long	4096                    ; 0x1000
 	.short	12                      ; 0xc
 	.short	0                       ; 0x0
-	.asciz	"task_done\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-	.size	_task_task_done, 42
+	.asciz	"task_reduce_normalizable\000\000\000\000\000\000\000"
+	.size	_task_task_reduce_normalizable, 42
 
-	.type	_global_parent_next,@object ; @_global_parent_next
-	.globl	_global_parent_next
+	.type	_task_task_reduce_normalize,@object ; @_task_task_reduce_normalize
+	.globl	_task_task_reduce_normalize
 	.align	1
-_global_parent_next:
+_task_task_reduce_normalize:
+	.short	task_reduce_normalize
+	.long	8192                    ; 0x2000
+	.short	13                      ; 0xd
 	.short	0                       ; 0x0
-	.size	_global_parent_next, 2
+	.asciz	"task_reduce_normalize\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_reduce_normalize, 42
 
-	.type	_global_out_len,@object ; @_global_out_len
-	.globl	_global_out_len
+	.type	_task_task_reduce_n_divisor,@object ; @_task_task_reduce_n_divisor
+	.globl	_task_task_reduce_n_divisor
 	.align	1
-_global_out_len:
+_task_task_reduce_n_divisor:
+	.short	task_reduce_n_divisor
+	.long	16384                   ; 0x4000
+	.short	14                      ; 0xe
 	.short	0                       ; 0x0
-	.size	_global_out_len, 2
+	.asciz	"task_reduce_n_divisor\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_reduce_n_divisor, 42
 
-	.type	_global_letter,@object  ; @_global_letter
-	.globl	_global_letter
+	.type	_task_task_reduce_quotient,@object ; @_task_task_reduce_quotient
+	.globl	_task_task_reduce_quotient
 	.align	1
-_global_letter:
+_task_task_reduce_quotient:
+	.short	task_reduce_quotient
+	.long	32768                   ; 0x8000
+	.short	15                      ; 0xf
 	.short	0                       ; 0x0
-	.size	_global_letter, 2
+	.asciz	"task_reduce_quotient\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_reduce_quotient, 42
 
-	.type	_global_prev_sample,@object ; @_global_prev_sample
-	.globl	_global_prev_sample
+	.type	_task_task_reduce_multiply,@object ; @_task_task_reduce_multiply
+	.globl	_task_task_reduce_multiply
 	.align	1
-_global_prev_sample:
+_task_task_reduce_multiply:
+	.short	task_reduce_multiply
+	.long	65536                   ; 0x10000
+	.short	16                      ; 0x10
 	.short	0                       ; 0x0
-	.size	_global_prev_sample, 2
+	.asciz	"task_reduce_multiply\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_reduce_multiply, 42
 
-	.type	_global_letter_idx,@object ; @_global_letter_idx
-	.globl	_global_letter_idx
+	.type	_task_task_reduce_compare,@object ; @_task_task_reduce_compare
+	.globl	_task_task_reduce_compare
 	.align	1
-_global_letter_idx:
+_task_task_reduce_compare:
+	.short	task_reduce_compare
+	.long	131072                  ; 0x20000
+	.short	17                      ; 0x11
 	.short	0                       ; 0x0
-	.size	_global_letter_idx, 2
+	.asciz	"task_reduce_compare\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_reduce_compare, 42
 
-	.type	_global_sample_count,@object ; @_global_sample_count
-	.globl	_global_sample_count
+	.type	_task_task_reduce_add,@object ; @_task_task_reduce_add
+	.globl	_task_task_reduce_add
 	.align	1
-_global_sample_count:
+_task_task_reduce_add:
+	.short	task_reduce_add
+	.long	262144                  ; 0x40000
+	.short	18                      ; 0x12
 	.short	0                       ; 0x0
-	.size	_global_sample_count, 2
+	.asciz	"task_reduce_add\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_reduce_add, 42
 
-	.type	_global_dict,@object    ; @_global_dict
-	.globl	_global_dict
+	.type	_task_task_reduce_subtract,@object ; @_task_task_reduce_subtract
+	.globl	_task_task_reduce_subtract
 	.align	1
-_global_dict:
-	.zero	3072
-	.size	_global_dict, 3072
-
-	.type	_global_node_count,@object ; @_global_node_count
-	.globl	_global_node_count
-	.align	1
-_global_node_count:
+_task_task_reduce_subtract:
+	.short	task_reduce_subtract
+	.long	524288                  ; 0x80000
+	.short	19                      ; 0x13
 	.short	0                       ; 0x0
-	.size	_global_node_count, 2
+	.asciz	"task_reduce_subtract\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_reduce_subtract, 42
 
-	.type	_global_sample,@object  ; @_global_sample
-	.globl	_global_sample
+	.type	_task_task_print_product,@object ; @_task_task_print_product
+	.globl	_task_task_print_product
 	.align	1
-_global_sample:
+_task_task_print_product:
+	.short	task_print_product
+	.long	1048576                 ; 0x100000
+	.short	20                      ; 0x14
 	.short	0                       ; 0x0
-	.size	_global_sample, 2
+	.asciz	"task_print_product\000\000\000\000\000\000\000\000\000\000\000\000\000"
+	.size	_task_task_print_product, 42
 
-	.type	_global_sibling,@object ; @_global_sibling
-	.globl	_global_sibling
+	.type	_global_modulus,@object ; @_global_modulus
+	.globl	_global_modulus
 	.align	1
-_global_sibling:
+_global_modulus:
+	.zero	32
+	.size	_global_modulus, 32
+
+	.type	_global_exponent_bak,@object ; @_global_exponent_bak
+	.globl	_global_exponent_bak
+	.align	1
+_global_exponent_bak:
 	.short	0                       ; 0x0
-	.size	_global_sibling, 2
+	.size	_global_exponent_bak, 2
 
-	.type	_global_parent_node,@object ; @_global_parent_node
-	.globl	_global_parent_node
+	.type	_global_exponent,@object ; @_global_exponent
+	.globl	_global_exponent
 	.align	1
-_global_parent_node:
-	.zero	6
-	.size	_global_parent_node, 6
-
-	.type	_global_parent,@object  ; @_global_parent
-	.globl	_global_parent
-	.align	1
-_global_parent:
+_global_exponent:
 	.short	0                       ; 0x0
-	.size	_global_parent, 2
+	.size	_global_exponent, 2
 
-	.type	_global_child,@object   ; @_global_child
-	.globl	_global_child
+	.type	_global_message_length,@object ; @_global_message_length
+	.globl	_global_message_length
 	.align	1
-_global_child:
+_global_message_length:
 	.short	0                       ; 0x0
-	.size	_global_child, 2
+	.size	_global_message_length, 2
 
-	.type	_global_sibling_node,@object ; @_global_sibling_node
-	.globl	_global_sibling_node
+	.type	_global_block_offset_bak,@object ; @_global_block_offset_bak
+	.globl	_global_block_offset_bak
 	.align	1
-_global_sibling_node:
-	.zero	6
-	.size	_global_sibling_node, 6
-
-	.type	_global_symbol,@object  ; @_global_symbol
-	.globl	_global_symbol
-	.align	1
-_global_symbol:
+_global_block_offset_bak:
 	.short	0                       ; 0x0
-	.size	_global_symbol, 2
+	.size	_global_block_offset_bak, 2
 
-	.type	_global_compressed_data,@object ; @_global_compressed_data
-	.globl	_global_compressed_data
+	.type	_global_block_offset,@object ; @_global_block_offset
+	.globl	_global_block_offset
 	.align	1
-_global_compressed_data:
-	.zero	384
-	.size	_global_compressed_data, 384
+_global_block_offset:
+	.short	0                       ; 0x0
+	.size	_global_block_offset, 2
+
+	.type	_global_cyphertext_len_bak,@object ; @_global_cyphertext_len_bak
+	.globl	_global_cyphertext_len_bak
+	.align	1
+_global_cyphertext_len_bak:
+	.short	0                       ; 0x0
+	.size	_global_cyphertext_len_bak, 2
+
+	.type	_global_cyphertext_len,@object ; @_global_cyphertext_len
+	.globl	_global_cyphertext_len
+	.align	1
+_global_cyphertext_len:
+	.short	0                       ; 0x0
+	.size	_global_cyphertext_len, 2
+
+	.type	_global_base,@object    ; @_global_base
+	.globl	_global_base
+	.align	1
+_global_base:
+	.zero	64
+	.size	_global_base, 64
+
+	.type	_global_block,@object   ; @_global_block
+	.globl	_global_block
+	.align	1
+_global_block:
+	.zero	64
+	.size	_global_block, 64
+
+	.type	_global_next_task,@object ; @_global_next_task
+	.globl	_global_next_task
+	.align	1
+_global_next_task:
+	.short	0
+	.size	_global_next_task, 2
+
+	.type	_global_product_bak,@object ; @_global_product_bak
+	.globl	_global_product_bak
+	.align	1
+_global_product_bak:
+	.zero	64
+	.size	_global_product_bak, 64
+
+	.type	_global_product_isDirty,@object ; @_global_product_isDirty
+	.globl	_global_product_isDirty
+	.align	1
+_global_product_isDirty:
+	.zero	64
+	.size	_global_product_isDirty, 64
+
+	.type	_global_product,@object ; @_global_product
+	.globl	_global_product
+	.align	1
+_global_product:
+	.zero	64
+	.size	_global_product, 64
+
+	.type	_global_cyphertext,@object ; @_global_cyphertext
+	.globl	_global_cyphertext
+	.align	1
+_global_cyphertext:
+	.zero	32
+	.size	_global_cyphertext, 32
+
+	.type	_global_digit_bak,@object ; @_global_digit_bak
+	.globl	_global_digit_bak
+	.align	1
+_global_digit_bak:
+	.short	0                       ; 0x0
+	.size	_global_digit_bak, 2
+
+	.type	_global_digit,@object   ; @_global_digit
+	.globl	_global_digit
+	.align	1
+_global_digit:
+	.short	0                       ; 0x0
+	.size	_global_digit, 2
+
+	.type	_global_carry_bak,@object ; @_global_carry_bak
+	.globl	_global_carry_bak
+	.align	1
+_global_carry_bak:
+	.short	0                       ; 0x0
+	.size	_global_carry_bak, 2
+
+	.type	_global_carry,@object   ; @_global_carry
+	.globl	_global_carry
+	.align	1
+_global_carry:
+	.short	0                       ; 0x0
+	.size	_global_carry, 2
+
+	.type	_global_print_which,@object ; @_global_print_which
+	.globl	_global_print_which
+_global_print_which:
+	.byte	0                       ; 0x0
+	.size	_global_print_which, 1
+
+	.type	_global_next_task_print,@object ; @_global_next_task_print
+	.globl	_global_next_task_print
+	.align	1
+_global_next_task_print:
+	.short	0
+	.size	_global_next_task_print, 2
+
+	.type	_global_reduce_bak,@object ; @_global_reduce_bak
+	.globl	_global_reduce_bak
+	.align	1
+_global_reduce_bak:
+	.short	0                       ; 0x0
+	.size	_global_reduce_bak, 2
+
+	.type	_global_reduce,@object  ; @_global_reduce
+	.globl	_global_reduce
+	.align	1
+_global_reduce:
+	.short	0                       ; 0x0
+	.size	_global_reduce, 2
+
+	.type	_global_offset,@object  ; @_global_offset
+	.globl	_global_offset
+	.align	1
+_global_offset:
+	.short	0                       ; 0x0
+	.size	_global_offset, 2
+
+	.type	_global_n_div,@object   ; @_global_n_div
+	.globl	_global_n_div
+	.align	1
+_global_n_div:
+	.short	0                       ; 0x0
+	.size	_global_n_div, 2
+
+	.type	_global_quotient_bak,@object ; @_global_quotient_bak
+	.globl	_global_quotient_bak
+	.align	1
+_global_quotient_bak:
+	.short	0                       ; 0x0
+	.size	_global_quotient_bak, 2
+
+	.type	_global_quotient,@object ; @_global_quotient
+	.globl	_global_quotient
+	.align	1
+_global_quotient:
+	.short	0                       ; 0x0
+	.size	_global_quotient, 2
+
+	.type	_global_product2,@object ; @_global_product2
+	.globl	_global_product2
+	.align	1
+_global_product2:
+	.zero	64
+	.size	_global_product2, 64
 
 	.type	_task__entry_task,@object ; @_task__entry_task
 	.globl	_task__entry_task
@@ -2332,41 +4318,382 @@ _task__entry_task:
 	.asciz	"_entry_task\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
 	.size	_task__entry_task, 42
 
+	.type	_global_exponent_next,@object ; @_global_exponent_next
+	.globl	_global_exponent_next
+	.align	1
+_global_exponent_next:
+	.short	0                       ; 0x0
+	.size	_global_exponent_next, 2
+
+	.type	data_src,@object        ; @data_src
+	.globl	data_src
+	.align	1
+data_src:
+	.zero	64
+	.size	data_src, 64
+
+	.type	data_dest,@object       ; @data_dest
+	.globl	data_dest
+	.align	1
+data_dest:
+	.zero	64
+	.size	data_dest, 64
+
+	.type	data_size,@object       ; @data_size
+	.globl	data_size
+	.align	1
+data_size:
+	.zero	64
+	.size	data_size, 64
+
 	.type	.L.str,@object          ; @.str
 	.section	.rodata.str1.1,"aMS",@progbits,1
 .L.str:
-	.asciz	"TIME end is 65536*%u+%u\r\n"
-	.size	.L.str, 26
+	.asciz	"init\r\n"
+	.size	.L.str, 7
 
 	.type	.L.str.1,@object        ; @.str.1
 .L.str.1:
-	.asciz	"Size of task %u: %u\r\n"
-	.size	.L.str.1, 22
+	.asciz	"digit: %u\r\n"
+	.size	.L.str.1, 12
 
 	.type	.L.str.2,@object        ; @.str.2
 .L.str.2:
-	.asciz	"Size of channel %u: %u\r\n"
-	.size	.L.str.2, 25
+	.asciz	"unsigned: %u\r\n"
+	.size	.L.str.2, 15
 
 	.type	.L.str.3,@object        ; @.str.3
 .L.str.3:
-	.asciz	"Size of data[i]: %u\r\n"
-	.size	.L.str.3, 22
+	.asciz	"init: out modulus\r\n"
+	.size	.L.str.3, 20
+
+	.type	pubkey,@object          ; @pubkey
+	.section	.ro_nv_vars,"a",@progbits
+	.align	1
+pubkey:
+	.ascii	"A\241\274\254\243.\251\201\251\267]\327e$R\352"
+	.short	3                       ; 0x3
+	.size	pubkey, 18
 
 	.type	.L.str.4,@object        ; @.str.4
+	.section	.rodata.str1.1,"aMS",@progbits,1
 .L.str.4:
-	.asciz	"Size of data_dest[i]: %u\r\n"
-	.size	.L.str.4, 27
+	.asciz	"init: out exp\r\n"
+	.size	.L.str.4, 16
 
 	.type	.L.str.5,@object        ; @.str.5
 .L.str.5:
-	.asciz	"Size of data_size[i]: %u\r\n"
-	.size	.L.str.5, 27
+	.asciz	"init: done\r\n"
+	.size	.L.str.5, 13
 
 	.type	.L.str.6,@object        ; @.str.6
 .L.str.6:
-	.asciz	"Total: %u\r\n"
-	.size	.L.str.6, 12
+	.asciz	"pad: len=%u offset=%u\r\n"
+	.size	.L.str.6, 24
+
+	.type	.L.str.7,@object        ; @.str.7
+.L.str.7:
+	.asciz	"pad: message done\r\n"
+	.size	.L.str.7, 20
+
+	.type	.L.str.8,@object        ; @.str.8
+.L.str.8:
+	.asciz	"process block: padded block at offset=%u: "
+	.size	.L.str.8, 43
+
+	.type	PAD_DIGITS,@object      ; @PAD_DIGITS
+	.section	.rodata,"a",@progbits
+PAD_DIGITS:
+	.byte	1
+	.size	PAD_DIGITS, 1
+
+	.type	.L.str.9,@object        ; @.str.9
+	.section	.rodata.str1.1,"aMS",@progbits,1
+.L.str.9:
+	.asciz	"%x "
+	.size	.L.str.9, 4
+
+	.type	.L.str.10,@object       ; @.str.10
+.L.str.10:
+	.asciz	"'"
+	.size	.L.str.10, 2
+
+	.type	PLAINTEXT,@object       ; @PLAINTEXT
+	.section	.ro_nv_vars,"a",@progbits
+PLAINTEXT:
+	.asciz	".RRRSSSAAA."
+	.size	PLAINTEXT, 12
+
+	.type	.L.str.11,@object       ; @.str.11
+	.section	.rodata.str1.1,"aMS",@progbits,1
+.L.str.11:
+	.asciz	"\r\n"
+	.size	.L.str.11, 3
+
+	.type	.L.str.12,@object       ; @.str.12
+.L.str.12:
+	.asciz	"exp: e=%x\r\n"
+	.size	.L.str.12, 12
+
+	.type	.L.str.13,@object       ; @.str.13
+.L.str.13:
+	.asciz	"mult block\r\n"
+	.size	.L.str.13, 13
+
+	.type	.L.str.14,@object       ; @.str.14
+.L.str.14:
+	.asciz	"mult block get result: block: "
+	.size	.L.str.14, 31
+
+	.type	.L.str.15,@object       ; @.str.15
+.L.str.15:
+	.asciz	"mult block get result: cyphertext len=%u\r\n"
+	.size	.L.str.15, 43
+
+	.type	.L.str.16,@object       ; @.str.16
+.L.str.16:
+	.asciz	"WARN: block dropped: cyphertext overlow [%u > %u]\r\n"
+	.size	.L.str.16, 52
+
+	.type	.L.str.17,@object       ; @.str.17
+.L.str.17:
+	.asciz	"mult block get results: block done, cyphertext_len=%u\r\n"
+	.size	.L.str.17, 56
+
+	.type	.L.str.18,@object       ; @.str.18
+.L.str.18:
+	.asciz	"square base\r\n"
+	.size	.L.str.18, 14
+
+	.type	.L.str.19,@object       ; @.str.19
+.L.str.19:
+	.asciz	"square base get result\r\n"
+	.size	.L.str.19, 25
+
+	.type	.L.str.20,@object       ; @.str.20
+.L.str.20:
+	.asciz	"suqare base get result: base[%u]=%x\r\n"
+	.size	.L.str.20, 38
+
+	.type	.L.str.21,@object       ; @.str.21
+.L.str.21:
+	.asciz	"print cyphertext: len=%u\r\n"
+	.size	.L.str.21, 27
+
+	.type	.L.str.22,@object       ; @.str.22
+.L.str.22:
+	.asciz	"%02x "
+	.size	.L.str.22, 6
+
+	.type	.L.str.23,@object       ; @.str.23
+.L.str.23:
+	.asciz	" "
+	.size	.L.str.23, 2
+
+	.type	.L.str.24,@object       ; @.str.24
+.L.str.24:
+	.asciz	"%c"
+	.size	.L.str.24, 3
+
+	.type	.L.str.25,@object       ; @.str.25
+.L.str.25:
+	.asciz	"mult mod\r\n"
+	.size	.L.str.25, 11
+
+	.type	.L.str.26,@object       ; @.str.26
+.L.str.26:
+	.asciz	"mult: digit=%u carry=%x\r\n"
+	.size	.L.str.26, 26
+
+	.type	.L.str.27,@object       ; @.str.27
+.L.str.27:
+	.asciz	"mult: i=%u a=%x b=%x p=%x\r\n"
+	.size	.L.str.27, 28
+
+	.type	.L.str.28,@object       ; @.str.28
+.L.str.28:
+	.asciz	"mult: c=%x p=%x\r\n"
+	.size	.L.str.28, 18
+
+	.type	.L.str.29,@object       ; @.str.29
+.L.str.29:
+	.asciz	"reduce: digits\r\n"
+	.size	.L.str.29, 17
+
+	.type	.L.str.30,@object       ; @.str.30
+.L.str.30:
+	.asciz	"reduce digits: p[%u]=%x\r\n"
+	.size	.L.str.30, 26
+
+	.type	.L.str.31,@object       ; @.str.31
+.L.str.31:
+	.asciz	"reduce: digits: all digits of message are zero\r\n"
+	.size	.L.str.31, 49
+
+	.type	.L.str.32,@object       ; @.str.32
+.L.str.32:
+	.asciz	"reduce: digits: d = %u\r\n"
+	.size	.L.str.32, 25
+
+	.type	.L.str.33,@object       ; @.str.33
+.L.str.33:
+	.asciz	"reduce: normalizable\r\n"
+	.size	.L.str.33, 23
+
+	.type	.L.str.34,@object       ; @.str.34
+.L.str.34:
+	.asciz	"reduce: normalizable: d=%u offset=%u\r\n"
+	.size	.L.str.34, 39
+
+	.type	.L.str.35,@object       ; @.str.35
+.L.str.35:
+	.asciz	"normalizable: m[%u]=%x n[%u]=%x\r\n"
+	.size	.L.str.35, 34
+
+	.type	.L.str.36,@object       ; @.str.36
+.L.str.36:
+	.asciz	"reduce: normalizable: reduction done: message < modulus\r\n"
+	.size	.L.str.36, 58
+
+	.type	.L.str.37,@object       ; @.str.37
+.L.str.37:
+	.asciz	"normalizable: %u\r\n"
+	.size	.L.str.37, 19
+
+	.type	.L.str.38,@object       ; @.str.38
+.L.str.38:
+	.asciz	"normalize\r\n"
+	.size	.L.str.38, 12
+
+	.type	.L.str.39,@object       ; @.str.39
+.L.str.39:
+	.asciz	"normalize: m[%u]=%x n[%u]=%x b=%u d=%x\r\n"
+	.size	.L.str.39, 41
+
+	.type	.L.str.40,@object       ; @.str.40
+.L.str.40:
+	.asciz	"reduce: normalize: reduction done: no digits to reduce\r\n"
+	.size	.L.str.40, 57
+
+	.type	.L.str.41,@object       ; @.str.41
+.L.str.41:
+	.asciz	"reduce: n divisor\r\n"
+	.size	.L.str.41, 20
+
+	.type	.L.str.42,@object       ; @.str.42
+.L.str.42:
+	.asciz	"reduce: n divisor: n[1]=%x n[0]=%x n_div=%x\r\n"
+	.size	.L.str.42, 46
+
+	.type	.L.str.43,@object       ; @.str.43
+.L.str.43:
+	.asciz	"reduce: quotient: d=%u\r\n"
+	.size	.L.str.43, 25
+
+	.type	.L.str.44,@object       ; @.str.44
+.L.str.44:
+	.asciz	"reduce: quotient: m_n=%x m[d]=%x\r\n"
+	.size	.L.str.44, 35
+
+	.type	.L.str.45,@object       ; @.str.45
+.L.str.45:
+	.asciz	"reduce: quotient: q0=%x\r\n"
+	.size	.L.str.45, 26
+
+	.type	.L.str.46,@object       ; @.str.46
+.L.str.46:
+	.asciz	"reduce: quotient: m[d]=%x m[d-1]=%x m[d-2]=%x n_q=%x%x\r\n"
+	.size	.L.str.46, 57
+
+	.type	.L.str.47,@object       ; @.str.47
+.L.str.47:
+	.asciz	"reduce: quotient: n_div=%x q0=%x\r\n"
+	.size	.L.str.47, 35
+
+	.type	.L.str.48,@object       ; @.str.48
+.L.str.48:
+	.asciz	"QN1 = %x\r\n"
+	.size	.L.str.48, 11
+
+	.type	.L.str.49,@object       ; @.str.49
+.L.str.49:
+	.asciz	"QN0 = %x\r\n"
+	.size	.L.str.49, 11
+
+	.type	.L.str.50,@object       ; @.str.50
+.L.str.50:
+	.asciz	"reduce: quotient: q=%x qn=%x%x\r\n"
+	.size	.L.str.50, 33
+
+	.type	.L.str.51,@object       ; @.str.51
+.L.str.51:
+	.asciz	"reduce: quotient: q=%x\r\n"
+	.size	.L.str.51, 25
+
+	.type	.L.str.52,@object       ; @.str.52
+.L.str.52:
+	.asciz	"reduce: multiply: d=%x q=%x\r\n"
+	.size	.L.str.52, 30
+
+	.type	.L.str.53,@object       ; @.str.53
+.L.str.53:
+	.asciz	"reduce: multiply: offset=%u\r\n"
+	.size	.L.str.53, 30
+
+	.type	.L.str.54,@object       ; @.str.54
+.L.str.54:
+	.asciz	"reduce: multiply: n[%u]=%x q=%x c=%x m[%u]=%x\r\n"
+	.size	.L.str.54, 48
+
+	.type	.L.str.55,@object       ; @.str.55
+.L.str.55:
+	.asciz	"reduce: compare\r\n"
+	.size	.L.str.55, 18
+
+	.type	.L.str.56,@object       ; @.str.56
+.L.str.56:
+	.asciz	"reduce: compare: m[%u]=%x qn[%u]=%x\r\n"
+	.size	.L.str.56, 38
+
+	.type	.L.str.57,@object       ; @.str.57
+.L.str.57:
+	.asciz	"reduce: compare: relation %c\r\n"
+	.size	.L.str.57, 31
+
+	.type	.L.str.58,@object       ; @.str.58
+.L.str.58:
+	.asciz	"reduce: add: d=%u offset=%u\r\n"
+	.size	.L.str.58, 30
+
+	.type	.L.str.59,@object       ; @.str.59
+.L.str.59:
+	.asciz	"reduce: add: m[%u]=%x n[%u]=%x c=%x r=%x\r\n"
+	.size	.L.str.59, 43
+
+	.type	.L.str.60,@object       ; @.str.60
+.L.str.60:
+	.asciz	"subtract entered!!"
+	.size	.L.str.60, 19
+
+	.type	.L.str.61,@object       ; @.str.61
+.L.str.61:
+	.asciz	"reduce: subtract: d=%u offset=%u\r\n"
+	.size	.L.str.61, 35
+
+	.type	.L.str.62,@object       ; @.str.62
+.L.str.62:
+	.asciz	"reduce: subtract: m[%u]=%x qn[%u]=%x b=%u r=%x\r\n"
+	.size	.L.str.62, 49
+
+	.type	.L.str.63,@object       ; @.str.63
+.L.str.63:
+	.asciz	"reduce: subtract: reduction done\r\n"
+	.size	.L.str.63, 35
+
+	.type	.L.str.64,@object       ; @.str.64
+.L.str.64:
+	.asciz	"print: P="
+	.size	.L.str.64, 10
 
 	.type	watchdog_bits,@object   ; @watchdog_bits
 	.local	watchdog_bits
@@ -2392,8 +4719,29 @@ puth.hex:
 	.ascii	"0123456789ABCDEF"
 	.size	puth.hex, 16
 
-	.type	gv_index,@object        ; @gv_index
+	.type	data_src_base,@object   ; @data_src_base
 	.section	.nv_vars,"aw",@progbits
+	.globl	data_src_base
+	.align	1
+data_src_base:
+	.short	data_src
+	.size	data_src_base, 2
+
+	.type	data_dest_base,@object  ; @data_dest_base
+	.globl	data_dest_base
+	.align	1
+data_dest_base:
+	.short	data_dest
+	.size	data_dest_base, 2
+
+	.type	data_size_base,@object  ; @data_size_base
+	.globl	data_size_base
+	.align	1
+data_size_base:
+	.short	data_size
+	.size	data_size_base, 2
+
+	.type	gv_index,@object        ; @gv_index
 	.globl	gv_index
 	.align	1
 gv_index:
@@ -2490,33 +4838,15 @@ _numBoots:
 	.short	0                       ; 0x0
 	.size	_numBoots, 2
 
-	.type	data_dest,@object       ; @data_dest
-	.globl	data_dest
-	.align	1
-data_dest:
-	.zero	66
-	.size	data_dest, 66
-
-	.type	data_size,@object       ; @data_size
-	.globl	data_size
-	.align	1
-data_size:
-	.zero	66
-	.size	data_size, 66
-
-	.type	data,@object            ; @data
-	.globl	data
-	.align	1
-data:
-	.zero	66
-	.size	data, 66
-
 
 	.globl	__interrupt_vector_51
 __interrupt_vector_51 = TimerB1_ISR
 	.ident	"clang version 3.8.0 (http://llvm.org/git/clang.git 5d5e0a9c209901f8d08ce6f71fcf11258e1ea946) (http://llvm.org/git/llvm.git 81386d4b4fdd80f038fd4ebddc59613770ea236c)"
 	.ident	"clang version 3.8.0 (http://llvm.org/git/clang.git 5d5e0a9c209901f8d08ce6f71fcf11258e1ea946) (http://llvm.org/git/llvm.git 81386d4b4fdd80f038fd4ebddc59613770ea236c)"
 	.ident	"clang version 3.8.0 (http://llvm.org/git/clang.git 52ed5ec631b0bbf5c714baa0cd83c33ebfe0c6aa) (http://llvm.org/git/llvm.git 81386d4b4fdd80f038fd4ebddc59613770ea236c)"
+	.ident	"clang version 3.8.0 (http://llvm.org/git/clang.git 5d5e0a9c209901f8d08ce6f71fcf11258e1ea946) (http://llvm.org/git/llvm.git 81386d4b4fdd80f038fd4ebddc59613770ea236c)"
+	.ident	"clang version 3.8.0 (http://llvm.org/git/clang.git 5d5e0a9c209901f8d08ce6f71fcf11258e1ea946) (http://llvm.org/git/llvm.git 81386d4b4fdd80f038fd4ebddc59613770ea236c)"
+	.ident	"clang version 3.8.0 (http://llvm.org/git/clang.git 5d5e0a9c209901f8d08ce6f71fcf11258e1ea946) (http://llvm.org/git/llvm.git 81386d4b4fdd80f038fd4ebddc59613770ea236c)"
 	.ident	"clang version 3.8.0 (http://llvm.org/git/clang.git 5d5e0a9c209901f8d08ce6f71fcf11258e1ea946) (http://llvm.org/git/llvm.git 81386d4b4fdd80f038fd4ebddc59613770ea236c)"
 	.ident	"clang version 3.8.0 (http://llvm.org/git/clang.git 5d5e0a9c209901f8d08ce6f71fcf11258e1ea946) (http://llvm.org/git/llvm.git 81386d4b4fdd80f038fd4ebddc59613770ea236c)"
 	.ident	"clang version 3.8.0 (http://llvm.org/git/clang.git 5d5e0a9c209901f8d08ce6f71fcf11258e1ea946) (http://llvm.org/git/llvm.git 81386d4b4fdd80f038fd4ebddc59613770ea236c)"

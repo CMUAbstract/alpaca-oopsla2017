@@ -1,0 +1,9 @@
+digraph "CFG for 'main' function" {
+	label="CFG for 'main' function";
+
+	Node0x3c38e90 [shape=record,label="{entry:\l  %retval = alloca i16, align 2\l  store i16 0, i16* %retval, align 2\l  call void @init_hw(), !dbg !14\l  br label %while.body, !dbg !15\l}"];
+	Node0x3c38e90 -> Node0x3c38ee0;
+	Node0x3c38ee0 [shape=record,label="{while.body:                                       \l  br label %while.body, !dbg !16\l}"];
+	Node0x3c38ee0 -> Node0x3c38ee0;
+	Node0x3c38f30 [shape=record,label="{return:                                           \l  %0 = load i16, i16* %retval, align 2, !dbg !19\l  ret i16 %0, !dbg !19\l}"];
+}

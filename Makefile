@@ -23,8 +23,8 @@ TOOLCHAINS = \
 #	-DTIME=$(TIME) \
 #	-DVERBOSE=$(VERBOSE) \
 
-#export BOARD ?= wisp
-export BOARD = mspts430
+export BOARD ?= wisp
+#export BOARD = mspts430
 
 include ext/maker/Makefile
 

@@ -426,18 +426,18 @@ void task_print_cyphertext()
 	for (i = 0; i < GV(cyphertext_len); ++i) {
 		c = GV(cyphertext, i);
 #if TIME == 0
-		printf("%02x ", c);
-		line[j++] = c;
+		PRINTF("%02x ", c);
+		//line[j++] = c;
 		if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
-			printf(" ");
-			for (j = 0; j < PRINT_HEX_ASCII_COLS; ++j) {
-				c = line[j];
-				if (!(32 <= c && c <= 127)) // not printable
-					c = '.';
-				printf("%c", c);
-			}
-			j = 0;
-			printf("\r\n");
+			PRINTF(" ");
+			//for (j = 0; j < PRINT_HEX_ASCII_COLS; ++j) {
+			//	c = line[j];
+			//	if (!(32 <= c && c <= 127)) // not printable
+			//		c = '.';
+			//	printf("%c", c);
+			//}
+			//j = 0;
+			PRINTF("\r\n");
 		}
 #endif
 	}
@@ -448,7 +448,7 @@ void task_print_cyphertext()
 #if TIME > 0
 	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
 #endif
-//	TRANSITION_TO(task_init);
+	TRANSITION_TO(task_init);
 }
 
 // TODO: this task also looks like a proxy: is it avoidable?

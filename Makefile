@@ -29,6 +29,7 @@ export BOARD ?= wisp
 include ext/maker/Makefile
 
 # Paths to toolchains here if not in or different from defaults in Makefile.env
+export TEST_WATCHPOINTS = 1
 
 export MEMENTOS_ROOT = $(LIB_ROOT)/mementos
 export DINO_ROOT = $(LIB_ROOT)/dino

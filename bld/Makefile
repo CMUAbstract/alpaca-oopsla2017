@@ -33,3 +33,5 @@ include $(LIB_ROOT)/maker/Makefile.count
 
 export LIBMSP_CLOCK_SOURCE = DCO
 export LIBMSP_DCO_FREQ = 8000000ull
+export LIBEDB_BOARD_VERSION_MAJOR=1
+export LIBEDB_BOARD_VERSION_MINOR=1

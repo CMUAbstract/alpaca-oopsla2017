@@ -23,9 +23,9 @@
 
 // #define VERBOSE
 
-#include "../data/keysize.h"
+//#include "../data/keysize.h"
 
-#define KEY_SIZE_BITS   128
+#define KEY_SIZE_BITS    64
 #define DIGIT_BITS       8 // arithmetic ops take 8-bit args produce 16-bit result
 #define DIGIT_MASK       0x00ff
 #define NUM_DIGITS       (KEY_SIZE_BITS / DIGIT_BITS)
@@ -69,7 +69,7 @@ static const uint8_t PAD_DIGITS[] = { 0x01 };
 
 // modulus: byte order: LSB to MSB, constraint MSB>=0x80
 static __ro_nv const pubkey_t pubkey = {
-#include "../data/key128.txt"
+#include "../data/key64.txt"
 };
 
 static __ro_nv const unsigned char PLAINTEXT[] =
@@ -79,29 +79,6 @@ static __ro_nv const unsigned char PLAINTEXT[] =
 #define NUM_PLAINTEXT_BLOCKS (sizeof(PLAINTEXT) / (NUM_DIGITS - NUM_PAD_DIGITS) + 1)
 #define CYPHERTEXT_SIZE (NUM_PLAINTEXT_BLOCKS * NUM_DIGITS)
 
-// If you link-in wisp-base, then you have to define some symbols.
-//uint8_t usrBank[USRBANK_SIZE];
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-	void TimerB1_ISR(void){
-		TBCTL &= ~(0x0002);
-		if(TBCTL && 0x0001){
-			overflow++;
-			TBCTL |= 0x0004;
-			TBCTL |= (0x0002);
-			TBCTL &= ~(0x0001);	
-		}
-	}
-
-
-// Have to define the vector table elements manually, because clang,
-// unlike gcc, does not generate sections for the vectors, it only
-// generates symbols (aliases). The linker script shipped in the
-// TI GCC distribution operates on sections, so we define a symbol and put it
-// in its own section here named as the linker script wants it.
-// The 2 bytes per alias symbol defined by clang are wasted.
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 	TASK(1,  task_init)
 	TASK(2,  task_pad)
@@ -157,65 +134,16 @@ static void init_hw()
 }
 void init()
 {
-	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	TBCTL |= 0x0200; //set 9 to one (SMCLK)
-	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	//	TBCTL &= ~(0x00C0); //divider = 1
-	TBCTL &= 0xFFEF; //set bit 4 to zero
-	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	TBCTL |= 0x0002; //interrupt enable
-#if (RTIME > 0) || (WTIME > 0) || (CTIME > 0)
-	TBCTL &= ~(0x0020); //set bit 5 to zero(halt!)
-#endif
 	init_hw();
 
 #ifdef CONFIG_EDB
 	edb_init();
 #endif
 
-	//#if defined(CONFIG_LIBEDB_PRINTF_BARE)
-	//    BARE_PRINTF_ENABLE();
-	//#elif defined(CONFIG_LIBMSPCONSOLE_PRINTF)
-	//    UART_init();
-	//#endif
-	INIT_CONSOLE();
-
-	GPIO(PORT_LED_1, DIR) |= BIT(PIN_LED_1);
-	GPIO(PORT_LED_2, DIR) |= BIT(PIN_LED_2);
-#if defined(PORT_LED_3)
-	GPIO(PORT_LED_3, DIR) |= BIT(PIN_LED_3);
-#endif
-
 	__enable_interrupt();
 
-#if defined(PORT_LED_3) // when available, this LED indicates power-on
-	GPIO(PORT_LED_3, OUT) |= BIT(PIN_LED_3);
-#endif
-
-	//   PRINTF(".%u.\r\n", curctx->task->idx);
+	PRINTF(".%u.\r\n", curctx->task->idx);
 }
-
-#ifdef SHOW_PROGRESS_ON_LED
-static void delay(uint32_t cycles)
-{
-	unsigned i;
-	for (i = 0; i < cycles / (1U << 15); ++i)
-		__delay_cycles(1U << 15);
-}
-
-static void blink(unsigned count, uint32_t duration, unsigned leds)
-{
-	unsigned i;
-	for (i = 0; i < count; ++i) {
-		GPIO(PORT_LED_1, OUT) |= (leds & LED1) ? BIT(PIN_LED_1) : 0x0;
-		GPIO(PORT_LED_2, OUT) |= (leds & LED2) ? BIT(PIN_LED_2) : 0x0;
-		delay(duration / 2);
-		GPIO(PORT_LED_1, OUT) &= (leds & LED1) ? ~BIT(PIN_LED_1) : ~0x0;
-		GPIO(PORT_LED_2, OUT) &= (leds & LED2) ? ~BIT(PIN_LED_2) : ~0x0;
-		delay(duration / 2);
-	}
-}
-#endif
 
 static void print_hex_ascii(const uint8_t *m, unsigned len)
 {
@@ -246,10 +174,6 @@ void task_init()
 	LOG("digit: %u\r\n", sizeof(digit_t));
 	LOG("unsigned: %u\r\n",sizeof(unsigned));
 
-#ifdef SHOW_COARSE_PROGRESS_ON_LED
-	blink(1, BLINK_DURATION_BOOT, LED1 | LED2);
-#endif
-
 	LOG("init: out modulus\r\n");
 
 	// TODO: consider passing pubkey as a structure type
@@ -272,10 +196,6 @@ void task_init()
 void task_pad()
 {
 	int i;
-
-#ifdef SHOW_COARSE_PROGRESS_ON_LED
-	GPIO(PORT_LED_1, OUT) &= ~BIT(PIN_LED_1);
-#endif
 
 	LOG("pad: len=%u offset=%u\r\n", GV(message_length), GV(block_offset));
 
@@ -307,9 +227,6 @@ void task_pad()
 
 	GV(block_offset) += NUM_DIGITS - NUM_PAD_DIGITS;
 
-#ifdef SHOW_COARSE_PROGRESS_ON_LED
-	GPIO(PORT_LED_1, OUT) |= BIT(PIN_LED_1);
-#endif
 	TRANSITION_TO(task_exp);
 }
 
@@ -425,7 +342,6 @@ void task_print_cyphertext()
 	//printf("Cyphertext:\r\n");
 	for (i = 0; i < GV(cyphertext_len); ++i) {
 		c = GV(cyphertext, i);
-#if TIME == 0
 		PRINTF("%02x ", c);
 		//line[j++] = c;
 		if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
@@ -439,16 +355,10 @@ void task_print_cyphertext()
 			//j = 0;
 			PRINTF("\r\n");
 		}
-#endif
 	}
 
-#ifdef SHOW_COARSE_PROGRESS_ON_LED
-	blink(1, BLINK_MESSAGE_DONE, LED2);
-#endif
-#if TIME > 0
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-#endif
-	TRANSITION_TO(task_init);
+	//TRANSITION_TO(task_init);
+	TRANSITION_TO(task_print_cyphertext);
 }
 
 // TODO: this task also looks like a proxy: is it avoidable?
@@ -467,10 +377,6 @@ void task_mult()
 	int i;
 	digit_t a, b, c;
 	digit_t dp, p;
-
-#ifdef SHOW_PROGRESS_ON_LED
-	blink(1, BLINK_DURATION_TASK / 4, LED1);
-#endif
 
 	LOG("mult: digit=%u carry=%x\r\n", GV(digit), GV(carry));
 
@@ -533,7 +439,7 @@ void task_reduce_digits()
 void task_reduce_normalizable()
 {
 	int i;
-	unsigned m, n, d, offset;
+	unsigned m, n, d;
 	bool normalizable = true;
 
 	LOG("reduce: normalizable\r\n");
@@ -571,11 +477,11 @@ void task_reduce_normalizable()
 
 	for (i = GV(reduce); i >= 0; --i) {
 
-		LOG("normalizable: m[%u]=%x n[%u]=%x\r\n", i, GV(product, i), i - offset, GV(modulus, i-offset));
+		LOG("normalizable: m[%u]=%x n[%u]=%x\r\n", i, GV(product, i), i - GV(offset), GV(modulus, i-offset));
 
-		if (GV(product, i) > GV(modulus, i-offset)) {
+		if (GV(product, i) > GV(modulus, i-_global_offset)) {
 			break;
-		} else if (GV(product, i) < GV(modulus, i-offset)) {
+		} else if (GV(product, i) < GV(modulus, i-_global_offset)) {
 			normalizable = false;
 			break;
 		}
@@ -644,11 +550,6 @@ void task_reduce_normalize()
 
 void task_reduce_n_divisor()
 {
-
-#ifdef SHOW_PROGRESS_ON_LED
-	blink(1, SEC_TO_CYCLES, LED2);
-#endif
-
 	LOG("reduce: n divisor\r\n");
 
 	// Divisor, derived from modulus, for refining quotient guess into exact value
@@ -663,10 +564,6 @@ void task_reduce_quotient()
 {
 	digit_t m_n, q;
 	uint32_t qn, n_q; // must hold at least 3 digits
-
-#ifdef SHOW_PROGRESS_ON_LED
-	blink(1, BLINK_DURATION_TASK, LED2);
-#endif
 
 	LOG("reduce: quotient: d=%u\r\n", GV(reduce));
 
@@ -722,10 +619,6 @@ void task_reduce_multiply()
 	digit_t m, n;
 	unsigned c, offset;
 
-#ifdef SHOW_PROGRESS_ON_LED
-	blink(1, BLINK_DURATION_TASK, LED2);
-#endif
-
 	LOG("reduce: multiply: d=%x q=%x\r\n", GV(reduce) + 1, GV(quotient));
 
 	// As part of this task, we also perform the left-shifting of the q*m
@@ -777,10 +670,6 @@ void task_reduce_compare()
 	int i;
 	char relation = '=';
 
-#ifdef SHOW_PROGRESS_ON_LED
-	blink(1, BLINK_DURATION_TASK, LED2);
-#endif
-
 	LOG("reduce: compare\r\n");
 
 	// TODO: could transform this loop into a self-edge
@@ -818,9 +707,6 @@ void task_reduce_add()
 	digit_t m, n, c;
 	unsigned offset;
 
-#ifdef SHOW_PROGRESS_ON_LED
-	blink(1, BLINK_DURATION_TASK, LED2);
-#endif
 	// Part of this task is to shift modulus by radix^(digit - NUM_DIGITS)
 	offset = GV(reduce) + 1 - NUM_DIGITS;
 
@@ -864,10 +750,6 @@ void task_reduce_subtract()
 	int i;
 	digit_t m, s, qn;
 	unsigned borrow, offset;
-
-#ifdef SHOW_PROGRESS_ON_LED
-	blink(1, BLINK_DURATION_TASK, LED2);
-#endif
 
 	// The qn product had been shifted by this offset, no need to subtract the zeros
 	offset = GV(reduce) + 1 - NUM_DIGITS;
@@ -919,7 +801,7 @@ void task_reduce_subtract()
 void task_print_product()
 {
 	const task_t* next_task;
-#ifdef VERBOSE
+#if 0
 	int i;
 
 	LOG("print: P=");

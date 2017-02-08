@@ -183,7 +183,6 @@ void task_init()
 
 	LOG("init: out exp\r\n");
 
-	GV(exponent) = pubkey.e;
 	GV(message_length) = message_length;
 	GV(block_offset) = 0;
 	GV(cyphertext_len) = 0;
@@ -224,6 +223,7 @@ void task_pad()
 		GV(block, i) = 0;
 
 	//GV(exponent_next) = GV(exponent);
+	GV(exponent) = pubkey.e;
 
 	GV(block_offset) += NUM_DIGITS - NUM_PAD_DIGITS;
 
@@ -477,7 +477,7 @@ void task_reduce_normalizable()
 
 	for (i = GV(reduce); i >= 0; --i) {
 
-		LOG("normalizable: m[%u]=%x n[%u]=%x\r\n", i, GV(product, i), i - GV(offset), GV(modulus, i-offset));
+		LOG("normalizable: m[%u]=%x n[%u]=%x\r\n", i, GV(product, i), i - GV(offset), GV(modulus, i-_global_offset));
 
 		if (GV(product, i) > GV(modulus, i-_global_offset)) {
 			break;

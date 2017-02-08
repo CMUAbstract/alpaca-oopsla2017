@@ -116,8 +116,6 @@ task_init:                              ; @task_init
 	call	#resume_application
 	jmp	.LBB1_14
 .LBB1_14:                               ; %do.end.13
-	mov.w	&pubkey+8, r12
-	mov.w	r12, &_global_exponent
 	mov.w	-4(r4), r12
 	mov.w	r12, &_global_message_length
 	mov.w	#0, &_global_block_offset
@@ -377,6 +375,8 @@ task_pad:                               ; @task_pad
 	mov.w	r12, -2(r4)
 	jmp	.LBB2_36
 .LBB2_39:                               ; %for.end.57
+	mov.w	&pubkey+8, r12
+	mov.w	r12, &_global_exponent
 	mov.w	#_global_block_offset_bak, r15
 	mov.w	&_global_block_offset_bak, r12
 	add.w	#7, r12
@@ -1206,15 +1206,15 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	push.w	r4
 	mov.w	r1, r4
 	push.w	r11
-	sub.w	#32, r1
-	mov.b	#1, -13(r4)
+	sub.w	#30, r1
+	mov.b	#1, -11(r4)
 	jmp	.LBB12_1
 .LBB12_1:                               ; %do.body
 	call	#request_non_interactive_debug_mode
 	mov.w	r1, r12
 	mov.w	#.L.str.33, 0(r12)
 	call	#printf
-	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
+	mov.w	r15, -14(r4)            ; 2-byte Folded Spill
 	call	#resume_application
 	jmp	.LBB12_2
 .LBB12_2:                               ; %do.end
@@ -1233,7 +1233,7 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	mov.w	r12, 2(r14)
 	mov.w	#.L.str.34, 0(r14)
 	call	#printf
-	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
+	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
 	call	#resume_application
 	jmp	.LBB12_4
 .LBB12_4:                               ; %do.end.3
@@ -1256,7 +1256,7 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	mov.w	r12, r13
 	rla.w	r13
 	mov.w	_global_product(r13), r13
-	mov.w	-12(r4), r14
+	mov.w	&_global_offset, r14
 	mov.w	r12, r15
 	sub.w	r14, r15
 	mov.w	r15, r14
@@ -1269,7 +1269,7 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	mov.w	r12, 2(r11)
 	mov.w	#.L.str.35, 0(r11)
 	call	#printf
-	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
+	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
 	call	#resume_application
 	jmp	.LBB12_8
 .LBB12_8:                               ; %do.end.9
@@ -1278,7 +1278,7 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	mov.w	r12, r13
 	rla.w	r13
 	mov.w	_global_product(r13), r13
-	mov.w	-12(r4), r14
+	mov.w	&_global_offset, r14
 	sub.w	r14, r12
 	rla.w	r12
 	mov.w	_global_modulus(r12), r12
@@ -1293,7 +1293,7 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	mov.w	r12, r13
 	rla.w	r13
 	mov.w	_global_product(r13), r13
-	mov.w	-12(r4), r14
+	mov.w	&_global_offset, r14
 	sub.w	r14, r12
 	rla.w	r12
 	mov.w	_global_modulus(r12), r12
@@ -1301,7 +1301,7 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	jhs	.LBB12_12
 	jmp	.LBB12_11
 .LBB12_11:                              ; %if.then.18
-	mov.b	#0, -13(r4)
+	mov.b	#0, -11(r4)
 	jmp	.LBB12_15
 .LBB12_12:                              ; %if.end
                                         ;   in Loop: Header=BB12_5 Depth=1
@@ -1316,7 +1316,7 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	mov.w	r12, -4(r4)
 	jmp	.LBB12_5
 .LBB12_15:                              ; %for.end
-	mov.b	-13(r4), r12
+	mov.b	-11(r4), r12
 	bit.w	#1, r12
 	jne	.LBB12_20
 	jmp	.LBB12_16
@@ -1332,7 +1332,7 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	mov.w	r1, r12
 	mov.w	#.L.str.36, 0(r12)
 	call	#printf
-	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
+	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
 	call	#resume_application
 	jmp	.LBB12_19
 .LBB12_19:                              ; %do.end.24
@@ -1343,17 +1343,17 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	jmp	.LBB12_21
 .LBB12_21:                              ; %do.body.26
 	call	#request_non_interactive_debug_mode
-	mov.b	-13(r4), r12
+	mov.b	-11(r4), r12
 	and.w	#1, r12
 	mov.w	r1, r13
 	mov.w	r12, 2(r13)
 	mov.w	#.L.str.37, 0(r13)
 	call	#printf
-	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
+	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
 	call	#resume_application
 	jmp	.LBB12_22
 .LBB12_22:                              ; %do.end.29
-	mov.b	-13(r4), r12
+	mov.b	-11(r4), r12
 	bit.w	#1, r12
 	jeq	.LBB12_24
 	jmp	.LBB12_23
@@ -1366,7 +1366,7 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	call	#transition_to
 	jmp	.LBB12_25
 .LBB12_25:                              ; %if.end.33
-	add.w	#32, r1
+	add.w	#30, r1
 	pop.w	r11
 	pop.w	r4
 	ret
@@ -3806,20 +3806,6 @@ _global_modulus:
 	.zero	16
 	.size	_global_modulus, 16
 
-	.type	_global_exponent_bak,@object ; @_global_exponent_bak
-	.globl	_global_exponent_bak
-	.align	1
-_global_exponent_bak:
-	.short	0                       ; 0x0
-	.size	_global_exponent_bak, 2
-
-	.type	_global_exponent,@object ; @_global_exponent
-	.globl	_global_exponent
-	.align	1
-_global_exponent:
-	.short	0                       ; 0x0
-	.size	_global_exponent, 2
-
 	.type	_global_message_length,@object ; @_global_message_length
 	.globl	_global_message_length
 	.align	1
@@ -3868,6 +3854,20 @@ _global_base:
 _global_block:
 	.zero	64
 	.size	_global_block, 64
+
+	.type	_global_exponent_bak,@object ; @_global_exponent_bak
+	.globl	_global_exponent_bak
+	.align	1
+_global_exponent_bak:
+	.short	0                       ; 0x0
+	.size	_global_exponent_bak, 2
+
+	.type	_global_exponent,@object ; @_global_exponent
+	.globl	_global_exponent
+	.align	1
+_global_exponent:
+	.short	0                       ; 0x0
+	.size	_global_exponent, 2
 
 	.type	_global_next_task,@object ; @_global_next_task
 	.globl	_global_next_task

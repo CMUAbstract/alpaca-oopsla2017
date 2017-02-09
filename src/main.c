@@ -54,7 +54,19 @@ typedef struct {
 #define BLINK_MESSAGE_DONE  (2 * SEC_TO_CYCLES)
 
 #define PRINT_HEX_ASCII_COLS 8
-
+unsigned overflow=0;
+__attribute__((interrupt(51))) 
+void TimerB1_ISR(void){
+	TBCTL &= ~(0x0002);
+	if(TBCTL && 0x0001){
+		overflow++;
+		TBCTL |= 0x0004;
+		TBCTL |= (0x0002);
+		TBCTL &= ~(0x0001);	
+	}
+}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 // #define SHOW_PROGRESS_ON_LED
 // #define SHOW_COARSE_PROGRESS_ON_LED
 
@@ -134,11 +146,18 @@ static void init_hw()
 }
 void init()
 {
+	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
+	TBCTL |= 0x0200; //set 9 to one (SMCLK)
+	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
+	TBCTL &= 0xFFEF; //set bit 4 to zero
+	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
+	TBCTL |= 0x0002; //interrupt enable
 	init_hw();
 
 #ifdef CONFIG_EDB
 	edb_init();
 #endif
+	INIT_CONSOLE();
 
 	__enable_interrupt();
 
@@ -340,6 +359,7 @@ void task_print_cyphertext()
 
 	//ENERGY_GUARD_BEGIN();
 	//printf("Cyphertext:\r\n");
+	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
 	for (i = 0; i < GV(cyphertext_len); ++i) {
 		c = GV(cyphertext, i);
 		PRINTF("%02x ", c);
@@ -356,7 +376,7 @@ void task_print_cyphertext()
 			PRINTF("\r\n");
 		}
 	}
-
+	while(1);
 	//TRANSITION_TO(task_init);
 	TRANSITION_TO(task_print_cyphertext);
 }

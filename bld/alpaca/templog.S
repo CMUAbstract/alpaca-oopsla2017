@@ -44,24 +44,6 @@ init:                                   ; @init
 	push.w	r4
 	mov.w	r1, r4
 	sub.w	#6, r1
-	mov.w	&0x03C0, r12
-	and.w	#-6401, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	bis.w	#512, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	bis.w	#192, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	and.w	#-17, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	bis.w	#32, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	bis.w	#2, r12
-	mov.w	r12, &0x03C0
 	call	#init_hw
 	call	#mspconsole_init
 	;APP
@@ -511,17 +493,9 @@ task_print_cyphertext:                  ; @task_print_cyphertext
 ; BB#0:                                 ; %entry
 	push.w	r4
 	mov.w	r1, r4
-	sub.w	#28, r1
+	sub.w	#14, r1
 	mov.w	#0, -4(r4)
-	mov.w	&overflow, r12
-	mov.w	&0x03D0, r13
-	mov.w	r1, r14
-	mov.w	r13, 4(r14)
-	mov.w	r12, 2(r14)
-	mov.w	#.L.str.2, 0(r14)
-	call	#printf
 	mov.w	#0, -2(r4)
-	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
 	jmp	.LBB9_1
 .LBB9_1:                                ; %for.cond
                                         ; =>This Inner Loop Header: Depth=1
@@ -536,10 +510,6 @@ task_print_cyphertext:                  ; @task_print_cyphertext
 	rla.w	r12
 	mov.w	_global_cyphertext(r12), r12
 	mov.w	r12, -6(r4)
-	mov.w	r1, r13
-	mov.w	r12, 2(r13)
-	mov.w	#.L.str.3, 0(r13)
-	call	#printf
 	mov.w	-2(r4), r12
 	add.w	#1, r12
 	mov.w	r12, r13
@@ -577,19 +547,10 @@ task_print_cyphertext:                  ; @task_print_cyphertext
 	and.w	#-8, r14
 	sub.w	r14, r12
 	cmp.w	#0, r12
-	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
 	jne	.LBB9_4
 	jmp	.LBB9_3
 .LBB9_3:                                ; %if.then
                                         ;   in Loop: Header=BB9_1 Depth=1
-	mov.w	r1, r12
-	mov.w	#.L.str.4, 0(r12)
-	call	#printf
-	mov.w	r1, r12
-	mov.w	#.L.str.5, 0(r12)
-	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
-	call	#printf
-	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
 	jmp	.LBB9_4
 .LBB9_4:                                ; %if.end
                                         ;   in Loop: Header=BB9_1 Depth=1
@@ -601,10 +562,8 @@ task_print_cyphertext:                  ; @task_print_cyphertext
 	mov.w	r12, -2(r4)
 	jmp	.LBB9_1
 .LBB9_6:                                ; %for.end
-	jmp	.LBB9_7
-.LBB9_7:                                ; %while.body
-                                        ; =>This Inner Loop Header: Depth=1
-	jmp	.LBB9_7
+	mov.w	#0, r15
+	call	#exit
 .Lfunc_end9:
 	.size	task_print_cyphertext, .Lfunc_end9-task_print_cyphertext
 
@@ -835,8 +794,6 @@ task_reduce_normalizable:               ; @task_reduce_normalizable
 	mov.w	r1, r4
 	sub.w	#10, r1
 	mov.b	#1, -9(r4)
-	mov.w	&_global_reduce, r12
-	mov.w	r12, -8(r4)
 	mov.w	&_global_reduce, r12
 	add.w	#-7, r12
 	mov.w	r12, &_global_offset
@@ -2873,7 +2830,16 @@ _task_task_print_product:
 	.asciz	"task_print_product\000\000\000\000\000\000\000\000\000\000\000\000\000"
 	.size	_task_task_print_product, 42
 
+	.type	timer,@object           ; @timer
+	.section	.data.rel,"aw",@progbits
+	.globl	timer
+	.align	1
+timer:
+	.short	0x03C0
+	.size	timer, 2
+
 	.type	_global_modulus,@object ; @_global_modulus
+	.section	.nv_vars,"aw",@progbits
 	.globl	_global_modulus
 	.align	1
 _global_modulus:
@@ -3132,26 +3098,6 @@ PLAINTEXT:
 	.asciz	"WARN: block dropped: cyphertext overlow [%u > %u]\r\n"
 	.size	.L.str.1, 52
 
-	.type	.L.str.2,@object        ; @.str.2
-.L.str.2:
-	.asciz	"TIME end is 65536*%u+%u\r\n"
-	.size	.L.str.2, 26
-
-	.type	.L.str.3,@object        ; @.str.3
-.L.str.3:
-	.asciz	"%02x "
-	.size	.L.str.3, 6
-
-	.type	.L.str.4,@object        ; @.str.4
-.L.str.4:
-	.asciz	" "
-	.size	.L.str.4, 2
-
-	.type	.L.str.5,@object        ; @.str.5
-.L.str.5:
-	.asciz	"\r\n"
-	.size	.L.str.5, 3
-
 	.type	watchdog_bits,@object   ; @watchdog_bits
 	.local	watchdog_bits
 	.comm	watchdog_bits,1,1
@@ -3191,7 +3137,37 @@ num_dirty_gv:
 	.short	0                       ; 0x0
 	.size	num_dirty_gv, 2
 
+	.type	rcount,@object          ; @rcount
+	.section	.bss,"aw",@nobits
+	.globl	rcount
+	.align	1
+rcount:
+	.short	0                       ; 0x0
+	.size	rcount, 2
+
+	.type	wcount,@object          ; @wcount
+	.globl	wcount
+	.align	1
+wcount:
+	.short	0                       ; 0x0
+	.size	wcount, 2
+
+	.type	tcount,@object          ; @tcount
+	.globl	tcount
+	.align	1
+tcount:
+	.short	0                       ; 0x0
+	.size	tcount, 2
+
+	.type	max_num_dirty_gv,@object ; @max_num_dirty_gv
+	.globl	max_num_dirty_gv
+	.align	1
+max_num_dirty_gv:
+	.short	0                       ; 0x0
+	.size	max_num_dirty_gv, 2
+
 	.type	curtime,@object         ; @curtime
+	.section	.nv_vars,"aw",@progbits
 	.globl	curtime
 	.align	1
 curtime:

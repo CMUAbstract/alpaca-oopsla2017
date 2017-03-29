@@ -101,7 +101,7 @@ static __ro_nv const unsigned char PLAINTEXT[] =
 	TASK(7,  task_square_base_get_result)
 	TASK(8,  task_print_cyphertext)
 	TASK(9,  task_mult_mod)
-	TASK(10,  task_mult)
+	TASK(10, task_mult)
 	TASK(11, task_reduce_digits)
 	TASK(12, task_reduce_normalizable)
 	TASK(13, task_reduce_normalize)
@@ -144,14 +144,22 @@ static void init_hw()
 	msp_gpio_unlock();
 	msp_clock_setup();
 }
+unsigned volatile *timer = &TBCTL;
 void init()
 {
-	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	TBCTL |= 0x0200; //set 9 to one (SMCLK)
-	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	TBCTL &= 0xFFEF; //set bit 4 to zero
-	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	TBCTL |= 0x0002; //interrupt enable
+//	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
+//	TBCTL |= 0x0200; //set 9 to one (SMCLK)
+//	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
+//	TBCTL &= 0xFFEF; //set bit 4 to zero
+//	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
+//	TBCTL |= 0x0002; //interrupt enable
+//	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
+//	*timer |= 0x0200; //set 9 to one (SMCLK)
+//	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
+//	*timer &= 0xFFEF; //set bit 4 to zero
+//	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
+//	*timer |= 0x0002; //interrupt enable
+//	*timer &= ~(0x0020); //set bit 5 to zero(halt!)
 	init_hw();
 
 #ifdef CONFIG_EDB
@@ -170,17 +178,17 @@ static void print_hex_ascii(const uint8_t *m, unsigned len)
 
 	for (i = 0; i < len; i += PRINT_HEX_ASCII_COLS) {
 		for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j)
-			printf("%02x ", m[i + j]);
+			//printf("%02x ", m[i + j]);
 		for (; j < PRINT_HEX_ASCII_COLS; ++j)
-			printf("   ");
-		printf(" ");
+			//printf("   ");
+		//printf(" ");
 		for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j) {
 			char c = m[i + j];
 			if (!(32 <= c && c <= 127)) // not printable
 				c = '.';
-			printf("%c", c);
+			//printf("%c", c);
 		}
-		printf("\r\n");
+		//printf("\r\n");
 	}
 }
 
@@ -359,13 +367,13 @@ void task_print_cyphertext()
 
 	//ENERGY_GUARD_BEGIN();
 	//printf("Cyphertext:\r\n");
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
+//	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
 	for (i = 0; i < GV(cyphertext_len); ++i) {
 		c = GV(cyphertext, i);
-		PRINTF("%02x ", c);
+//		PRINTF("%02x ", c);
 		//line[j++] = c;
 		if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
-			PRINTF(" ");
+//			PRINTF(" ");
 			//for (j = 0; j < PRINT_HEX_ASCII_COLS; ++j) {
 			//	c = line[j];
 			//	if (!(32 <= c && c <= 127)) // not printable
@@ -373,10 +381,10 @@ void task_print_cyphertext()
 			//	printf("%c", c);
 			//}
 			//j = 0;
-			PRINTF("\r\n");
+//			PRINTF("\r\n");
 		}
 	}
-	while(1);
+	exit(0);
 	//TRANSITION_TO(task_init);
 	TRANSITION_TO(task_print_cyphertext);
 }
@@ -490,7 +498,7 @@ void task_reduce_normalizable()
 	// comparison/subtraction of the digits, we offset the index into the
 	// product digits by (l-k) = NUM_DIGITS.
 
-	d = *READ(GV(reduce));
+//	d = *READ(GV(reduce));
 
 	GV(offset) = GV(reduce) + 1 - NUM_DIGITS; // TODO: can this go below zero
 	LOG("reduce: normalizable: d=%u offset=%u\r\n", GV(reduce), GV(offset));
@@ -622,7 +630,6 @@ void task_reduce_quotient()
 		LOG("reduce: quotient: q=%x qn=%x%x\r\n", GV(quotient),
 				(uint16_t)((qn >> 16) & 0xffff), (uint16_t)(qn & 0xffff));
 	} while (qn > n_q);
-
 	// This is still not the final quotient, it may be off by one,
 	// which we determine and fix in the 'compare' and 'add' steps.
 	LOG("reduce: quotient: q=%x\r\n", GV(quotient));

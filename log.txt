@@ -1,8 +1,0 @@
-make TOOLCHAIN=alpaca -e -C bld/alpaca all
-make[1]: Entering directory '/home/reviewer/src/apps/app-temp-log-alpaca-new/bld/alpaca'
-mkdir -p "./."
-/opt/llvm/llvm-install/bin/clang -emit-llvm -c -I/home/reviewer/src/apps/app-temp-log-alpaca-new/ext/libmspbuiltins/src/include -DCONFIG_LIBMSPCONSOLE_PRINTF -I/home/reviewer/src/apps/app-temp-log-alpaca-new/ext/libmspconsole/src/include -I/home/reviewer/src/apps/app-temp-log-alpaca-new/ext/libwispbase/src/include -DVERBOSE=0 -I/src/include -DCOUNT=0 -DOPTED=0 -DGBUF=1 -DSBUF=0 -DTIME=1 -DRTIME=0 -DWTGTIME=0 -DCTIME=0  -DBOARD_MSP_TS430 --target=msp430 -D__MSP430FR5969__ -nobuiltininc -nostdinc++ -isysroot /none -O0 -g -std=c99 -Wall -MD -I /opt/ti/mspgcc/lib/gcc/msp430-elf/4.9.1/include -I /opt/ti/mspgcc/msp430-elf/include -I /opt/ti/mspgcc/include -I /home/reviewer/src/apps/app-temp-log-alpaca-new/src  -I/home/reviewer/src/apps/app-temp-log-alpaca-new/ext/libmsp/src/include -I/home/reviewer/src/apps/app-temp-log-alpaca-new/ext/libio/src/include -I/home/reviewer/src/apps/app-temp-log-alpaca-new/ext/libmspprintf/src/include -I/home/reviewer/src/apps/app-temp-log-alpaca-new/ext/alpaca/AlpacaRuntime/libalpaca/src/include /home/reviewer/src/apps/app-temp-log-alpaca-new/src/main.c -o main.bc
-/opt/llvm/llvm-install/bin//opt -debug -stats -load /home/reviewer/src/apps/app-temp-log-alpaca-new/ext/alpaca/LLVM/build/skeleton/libSkeletonPass.so \
-  -alpaca \
-  -o main.alpaca.bc main.bc
-make[1]: Leaving directory '/home/reviewer/src/apps/app-temp-log-alpaca-new/bld/alpaca'

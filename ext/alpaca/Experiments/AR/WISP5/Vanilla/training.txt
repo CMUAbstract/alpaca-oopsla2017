@@ -1,3 +1,0 @@
-1. build ar.elf with -DTRAINING
-2. break on the nop in main()
-3. dump binary memory model.bin &model &(model[190])

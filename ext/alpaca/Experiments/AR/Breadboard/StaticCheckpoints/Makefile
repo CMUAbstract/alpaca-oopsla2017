@@ -1,2 +1,0 @@
-LOADPASS=''
-include ../../../Experiment.mk

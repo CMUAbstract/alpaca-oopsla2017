@@ -1,5 +1,0 @@
-digraph "CFG for 'init_hw' function" {
-	label="CFG for 'init_hw' function";
-
-	Node0x3c3c7d0 [shape=record,label="{entry:\l  call void bitcast (void (...)* @msp_watchdog_disable to void ()*)(), !dbg !14\l  %0 = load volatile i16, i16* @\"\\010x0130\", align 2, !dbg !15\l  %and = and i16 %0, -2, !dbg !15\l  store volatile i16 %and, i16* @\"\\010x0130\", align 2, !dbg !15\l  call void bitcast (void (...)* @msp_clock_setup to void ()*)(), !dbg !16\l  ret void, !dbg !17\l}"];
-}

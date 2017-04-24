@@ -38,3 +38,6 @@
 [submodule "ext/alpaca"]
 	path = ext/alpaca
 	url = git@github.com:CMUAbstract/alpaca-new.git
+[submodule "ext/libmspmath"]
+	path = ext/libmspmath
+	url = git@github.com:CMUAbstract/libmspmath.git

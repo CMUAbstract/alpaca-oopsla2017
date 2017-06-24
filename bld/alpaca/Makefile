@@ -3,6 +3,7 @@
 # override the defualt setting in root makefile
 
 override TOOLCHAIN = clang
+override TOOL = alpaca
 
 include ../Makefile
 

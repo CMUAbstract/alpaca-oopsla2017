@@ -1,0 +1,51 @@
+# This is the Makefile for using the Mementos toolchain to build an app.
+# Include it from a bld/mementos directory in your app (built with 'maker').
+
+include $(MAKER_ROOT)/Makefile.env
+
+CFLAGS += \
+	-DMEMENTOS \
+
+LLC_FLAGS=-combiner-alias-analysis
+
+OPT_MODULES = $(MEMENTOS_ROOT)/llvm/bld/lib/Mementos.so
+OPT_FLAGS=-debug -stats
+
+ifeq ($(MEMENTOS_NONVOLATILE),1)
+CFLAGS += -DMEMENTOS_NONVOLATILE
+endif
+
+# This is optional because mementos can't tell NV globals apart,
+# so this is a quick workaround. Only set this flag if you
+# have no volatile globals in the application.
+ifeq ($(MEMENTOS_IGNORE_GLOBALS),0)
+OPT_MODULE_FLAGS += -mementos-add-global-size-global
+endif
+
+ifeq ($(MEMENTOS_MODE),latch)
+CFLAGS += -DMEMENTOS_LATCH
+OPT_MODULE_FLAGS += -mementos-rename-main
+OPT_PROGRAM_FLAGS += -mementos-instrument-all-loop-latches
+endif
+ifeq ($(MEMENTOS_MODE),return)
+CFLAGS += -DMEMENTOS_RETURN
+OPT_MODULE_FLAGS += -mementos-rename-main
+OPT_PROGRAM_FLAGS += -mementos-instrument-all-function-returns
+endif
+ifeq ($(MEMENTOS_MODE),timer+latch)
+CFLAGS += -DMEMENTOS_LATCH -DMEMENTOS_TIMER
+OPT_MODULE_FLAGS += -mementos-rename-main
+OPT_PROGRAM_FLAGS += -mementos-instrument-all-loop-latches
+endif
+ifeq ($(MEMENTOS_MODE),oracle)
+CFLAGS += -DMEMENTOS_ORACLE
+OPT_MODULE_FLAGS += -mementos-rename-main
+endif
+ifeq ($(MEMENTOS_MODE),manual)
+CFLAGS += -DMEMENTOS_ORACLE
+endif
+
+DEPS += libmementos
+DEP_ROOT_libmementos = $(MEMENTOS_ROOT)
+
+include $(MAKER_ROOT)/Makefile.clang

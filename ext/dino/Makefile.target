@@ -1,0 +1,62 @@
+# This is the Makefile for using the DINO toolchain to build an app.
+# Include it from a bld/dino directory in your app (built with 'maker').
+
+include $(MAKER_ROOT)/Makefile.env
+
+DINO_MODE ?= auto
+
+ifeq ($(DINO_MODE),manual)
+LOCAL_CFLAGS += -DDINO_MODE_MANUAL
+else ifeq ($(DINO_MODE),semiauto)
+LOCAL_CFLAGS += -DDINO_MODE_MANUAL
+else ifeq ($(DINO_MODE),auto)
+LOCAL_CFLAGS += -DDINO_MODE_AUTO
+else
+$(error Unrecognized DINO mode: $(DINO_MODE))
+endif
+
+# Part of DINO's target makefile responsibility is to configure
+# Mementos. Mementos configuration is not exposed to target.
+
+MEMENTOS_MODE = manual
+include $(MEMENTOS_ROOT)/Makefile.flags
+
+LOCAL_CFLAGS += -DDINO
+
+#DINO_LIB = $(DINO_ROOT)/LLVM/bld/lib/DINO.so
+DINO_LIB = 
+
+ifeq ($(DINO_MODE),auto)
+%.dino.bc : %.bc
+	$(OPT) -debug -stats \
+	  -o $@ $<
+#	$(OPT) -debug -stats -load $(DINO_LIB) \
+#	  -dino--task-split \
+#	  -dino--task-boundaries \
+#	  -dino--versioner \
+#	  -dino--task-cost \
+#	  -dot-cfg \
+#	  -o $@ $<
+
+LINK_OBJECTS = $(OBJECTS:.o=.dino.bc)
+
+else # DINO_MODE = manual || semiauto
+
+%.dino.bc : %.bc
+	cp $^ $@
+
+endif # DINO_MODE = auto
+
+override DEPS += \
+	libdino \
+	libmementos \
+
+DEP_ROOT_libdino = $(DINO_ROOT)/DinoRuntime
+DEP_ROOT_libmementos = $(MEMENTOS_ROOT)
+
+override CLFAGS += $(LOCAL_CFLAGS)
+
+include $(MAKER_ROOT)/Makefile.clang
+
+# do not remove any intermediate artifacts
+.SECONDARY:

@@ -7,7 +7,7 @@ TOOLCHAINS = \
 	gcc \
 	clang \
 	dino \
-	mementos \
+	chain \
 	alpaca \
 
 #OPTED ?= 0
@@ -23,8 +23,9 @@ TOOLCHAINS = \
 #	-DTIME=$(TIME) \
 #	-DVERBOSE=$(VERBOSE) \
 
-export BOARD ?= wisp
-#export BOARD = mspts430
+export SRC = rsa
+
+export BOARD = mspts430
 
 include ext/maker/Makefile
 
@@ -34,3 +35,4 @@ include ext/maker/Makefile
 export MEMENTOS_ROOT = $(LIB_ROOT)/mementos
 export DINO_ROOT = $(LIB_ROOT)/dino
 export ALPACA_ROOT = $(LIB_ROOT)/alpaca
+export CHAIN_ROOT = $(LIB_ROOT)/chain

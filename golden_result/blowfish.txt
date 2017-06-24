@@ -1,0 +1,14 @@
+result: 3E
+result: CB
+result: F3
+result: E6
+result: B0
+result: B5
+result: 80
+result: 57
+result: D7
+result: DB
+result: C6
+result: 6B
+result: 31
+

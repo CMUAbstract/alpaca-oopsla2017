@@ -1,0 +1,47 @@
+# The compiler flag generation is factored into this separate file
+# because it may be included by consumers who include mementos.h,
+# since mementos.h is parametrized by these compiler flags.
+
+include $(MEMENTOS_ROOT)/Makefile.config
+
+ifeq ($(MEMENTOS_HARDWARE),1)
+LOCAL_CFLAGS += -DMEMENTOS_HARDWARE
+endif
+
+ifeq ($(MEMENTOS_LOGGING),1)
+LOCAL_CFLAGS += -DMEMENTOS_LOGGING
+endif
+
+ifeq ($(MEMENTOS_NVMEM_TYPE),fram)
+LOCAL_CFLAGS += -DMEMENTOS_FRAM
+else ifeq ($(MEMENTOS_NVMEM_TYPE),flash)
+LOCAL_CFLAGS += -DMEMENTOS_FLASH
+else
+$(error Unrecognized MEMENTOS_NVMEM_TYPE: "$(MEMENTOS_NVMEM_TYPE)")
+endif
+
+ifeq ($(MEMENTOS_MODE),latch)
+LOCAL_CFLAGS += -DMEMENTOS_LATCH
+else ifeq ($(MEMENTOS_MODE),return)
+LOCAL_CFLAGS += -DMEMENTOS_RETURN
+else ifeq ($(MEMENTOS_MODE),oracle)
+LOCAL_CFLAGS += -DMEMENTOS_ORACLE
+else ifeq ($(MEMENTOS_MODE),manual)
+LOCAL_CFLAGS += -DMEMENTOS_ORACLE
+else
+$(error Unrecognized MEMENTOS_MODE: "$(MEMENTOS_MODE)")
+endif
+
+ifeq ($(MEMENTOS_INIT_FUNC),1)
+LOCAL_CFLAGS += -DMEMENTOS_INIT_FUNC
+endif
+
+ifeq ($(MEMENTOS_VOLTAGE_CHECK),1)
+LOCAL_CFLAGS += -DMEMENTOS_VOLTAGE_CHECK
+endif
+
+ifeq ($(MEMENTOS_TIMER),1)
+LOCAL_CFLAGS += -DMEMENTOS_TIMER
+endif
+
+override CFLAGS += $(LOCAL_CFLAGS)

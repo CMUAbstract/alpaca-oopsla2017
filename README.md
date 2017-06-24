@@ -1,16 +1,28 @@
-RSA application written in Alpaca
+Test environment for OOPSLA 2017
 ========================================
 
-This app encrypts arbitrary string using designated key.
+This is an all-in-one environment for testing Alpaca, Chain and DINO (for OOPSLA 2017).
+There are 6 apps each, and app can be selected by the SRC flag.
+(SRC={ar, cuckoo, rsa, blowfish, cem, bc}, default is rsa)
+Each app can run on either WISP (intermittent power) or MSPTS430 (continuous power).
+It can be selected by the BOARD flag. 
+(BOARD={wisp, mspts430}, default is mspts430).
+To run it on device, you should flash it using MSP-FET. To see output (UART), you should
+connect UART to your PC. For it to work on wisp, you need EDB.
+Automatically, if you use mspts430, internal timer is used to measure run time. To measure
+runtime on wisp, we used EDB.
+To do accurate run time measurement, remove all PRINTFs.
 
 Build:
 
 	$ make bld/gcc/depclean
 	$ make bld/gcc/dep
-	$ make bld/alpaca/depclean
-	$ make bld/alpaca/dep
-	$ make bld/alpaca/all
+	$ make bld/{alpaca,chain,dino}/depclean
+	$ make bld/{alpaca,chain,dino}/dep BOARD={wisp,mspts430}
+	$ make bld/{alpaca,chain,dino)/all BOARD={wisp,mspts430} SRC={ar,cuckoo,rsa,blowfish,cem,bc}
 
 Flash:
 
-	$ make bld/alpaca/prog
+	$ mspdebug -v 3300 -d /dev/ttyACM0 tilib
+	$ prog bld/{alpaca,chain,dino}/{ar.cuckoo,rsa,blowfish,cem,bc}.out
+	$ run

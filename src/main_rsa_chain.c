@@ -312,7 +312,7 @@ static void init_hw()
 
 void init()
 {
-#if BOARD == mspts430
+#ifdef BOARD_MSP_TS430
 	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
 	TBCTL |= 0x0200; //set 9 to one (SMCLK)
 	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
@@ -334,26 +334,6 @@ void init()
 }
 
 
-static void print_hex_ascii(const uint8_t *m, unsigned len)
-{
-    int i, j;
-
-    for (i = 0; i < len; i += PRINT_HEX_ASCII_COLS) {
-        for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j)
-            printf("%02x ", m[i + j]);
-        for (; j < PRINT_HEX_ASCII_COLS; ++j)
-            printf("   ");
-        printf(" ");
-        for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j) {
-            char c = m[i + j];
-            if (!(32 <= c && c <= 127)) // not printable
-                c = '.';
-            printf("%c", c);
-        }
-        printf("\r\n");
-    }
-}
-
 void task_init()
 {
     int i;
@@ -363,13 +343,6 @@ void task_init()
     LOG("init\r\n");
     LOG("digit: %u\r\n", sizeof(digit_t));
     LOG("unsigned: %u\r\n",sizeof(unsigned));
-
-
-    //ENERGY_GUARD_BEGIN();
-   // printf("Message:\r\n"); print_hex_ascii(PLAINTEXT, message_length);
-   // printf("Public key: exp = 0x%x  N = \r\n", pubkey.e);
-   // print_hex_ascii(pubkey.n, NUM_DIGITS);
-    //ENERGY_GUARD_END();
 
     LOG("init: out modulus\r\n");
 
@@ -613,19 +586,19 @@ void task_print_cyphertext()
     LOG("print cyphertext: len=%u\r\n", cyphertext_len);
 
 	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-    //ENERGY_GUARD_BEGIN();
-    printf("Cyphertext:\r\n");
+    BLOCK_PRINTF_BEGIN();
+    BLOCK_PRINTF("Cyphertext:\r\n");
     for (i = 0; i < cyphertext_len; ++i) {
         c = *CHAN_IN1(digit_t, cyphertext[i], CH(task_mult_block_get_result, task_print_cyphertext));
-        printf("%02x ", c);
+        BLOCK_PRINTF("%02x ", c);
         if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
-            printf(" ");
+            BLOCK_PRINTF(" ");
             j = 0;
-            printf("\r\n");
+            BLOCK_PRINTF("\r\n");
         }
     }
-    printf("\r\n");
-    //ENERGY_GUARD_END();
+    BLOCK_PRINTF("\r\n");
+    BLOCK_PRINTF_END();
     while(1);
     TRANSITION_TO(task_print_cyphertext);
 }

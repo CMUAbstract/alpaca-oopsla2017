@@ -23,8 +23,8 @@
 #define LENGTH 13
 unsigned volatile *timer = &TBCTL;
 static __ro_nv const char cp[32] = {'1','2','3','4','5','6','7','8','9','0',
-		'A','B','C','D','E','F','F','E','D','C','B','A',
-		'0','9','8','7','6','5','4','3','2','1'}; //mimicing 16byte hex key (0x1234_5678_90ab_cdef_fedc_ba09_8765_4321)
+	'A','B','C','D','E','F','F','E','D','C','B','A',
+	'0','9','8','7','6','5','4','3','2','1'}; //mimicing 16byte hex key (0x1234_5678_90ab_cdef_fedc_ba09_8765_4321)
 static __ro_nv const char indata[LENGTH] = {'H','e','l','l','o',',',' ','w','o','r','l','d','!'};
 
 static __ro_nv const uint32_t init_key[18] = {
@@ -305,15 +305,15 @@ static __ro_nv const uint32_t init_s3[256] = {
 
 unsigned overflow=0;
 __attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
+	void TimerB1_ISR(void){
+		TBCTL &= ~(0x0002);
+		if(TBCTL && 0x0001){
+			overflow++;
+			TBCTL |= 0x0004;
+			TBCTL |= (0x0002);
+			TBCTL &= ~(0x0001);	
+		}
 	}
-}
 
 
 // Have to define the vector table elements manually, because clang,
@@ -325,38 +325,38 @@ void TimerB1_ISR(void){
 __attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
 void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
-TASK(1,  task_init)
-TASK(2,  task_set_ukey)
-TASK(3,  task_done)
-TASK(4,  task_init_key)
-TASK(5,  task_init_s)
-TASK(6,  task_set_key)
-TASK(7,  task_set_key2)
-TASK(8,  task_encrypt)
-TASK(8,  task_start_encrypt)
-TASK(9,  task_start_encrypt2)
+	TASK(1,  task_init)
+	TASK(2,  task_set_ukey)
+	TASK(3,  task_done)
+	TASK(4,  task_init_key)
+	TASK(5,  task_init_s)
+	TASK(6,  task_set_key)
+	TASK(7,  task_set_key2)
+	TASK(8,  task_encrypt)
+	TASK(8,  task_start_encrypt)
+	TASK(9,  task_start_encrypt2)
 TASK(10,  task_start_encrypt3)
 
-GLOBAL_SB(uint8_t*, return_to);	
-GLOBAL_SB(char, result, LENGTH);
-GLOBAL_SB(unsigned char, ukey, 16);
-GLOBAL_SB(uint32_t, s0, 256);
-GLOBAL_SB(uint32_t, s1, 256);
-GLOBAL_SB(uint32_t, s2, 256);
-GLOBAL_SB(uint32_t, s3, 256);
-GLOBAL_SB(unsigned, index);
-GLOBAL_SB(uint32_t, index2);
-GLOBAL_SB(unsigned, n);
-GLOBAL_SB(task_t*, next_task);
-GLOBAL_SB(uint32_t, input, 2);
-GLOBAL_SB(unsigned char, iv, 8);
-GLOBAL_SB(uint32_t, key, 18);
+	GLOBAL_SB(uint8_t*, return_to);	
+	GLOBAL_SB(char, result, LENGTH);
+	GLOBAL_SB(unsigned char, ukey, 16);
+	GLOBAL_SB(uint32_t, s0, 256);
+	GLOBAL_SB(uint32_t, s1, 256);
+	GLOBAL_SB(uint32_t, s2, 256);
+	GLOBAL_SB(uint32_t, s3, 256);
+	GLOBAL_SB(unsigned, index);
+	GLOBAL_SB(uint32_t, index2);
+	GLOBAL_SB(unsigned, n);
+	GLOBAL_SB(task_t*, next_task);
+	GLOBAL_SB(uint32_t, input, 2);
+	GLOBAL_SB(unsigned char, iv, 8);
+	GLOBAL_SB(uint32_t, key, 18);
 
 #if VERBOSE > 0
-void print_long(uint32_t l) {
-	LOG("%04x", (unsigned)((l>>16) & 0xffff));
-	LOG("%04x\r\n",l & 0xffff);
-}
+	void print_long(uint32_t l) {
+		LOG("%04x", (unsigned)((l>>16) & 0xffff));
+		LOG("%04x\r\n",l & 0xffff);
+	}
 #endif
 void task_init()
 {
@@ -383,7 +383,7 @@ void task_set_ukey() {
 			GV(ukey, i/2-1) = by & 0xff;
 			LOG("ukey[%u]: %u\r\n",i/2-1,by & 0xff);
 		}
-			
+
 	}
 	TRANSITION_TO(task_init_key);
 }
@@ -415,17 +415,17 @@ void task_init_s() {
 		TRANSITION_TO(task_init_s);
 	}
 	/*
-	for (i = 0; i < 1024; ++i) {
-		if (i < 256) 
-			GV(s0, i) = init_s0[i];
-		else if (i < 256*2)
-			GV(s1, i-256) = init_s1[i-256];
-		else if (i < 256*3)
-			GV(s2, i-256*2) = init_s2[i-256*2];
-		else 
-			GV(s3, i-256*3) = init_s3[i-256*3];
-	}
-	TRANSITION_TO(task_set_key);*/
+	   for (i = 0; i < 1024; ++i) {
+	   if (i < 256) 
+	   GV(s0, i) = init_s0[i];
+	   else if (i < 256*2)
+	   GV(s1, i-256) = init_s1[i-256];
+	   else if (i < 256*3)
+	   GV(s2, i-256*2) = init_s2[i-256*2];
+	   else 
+	   GV(s3, i-256*3) = init_s3[i-256*3];
+	   }
+	   TRANSITION_TO(task_set_key);*/
 }
 void task_set_key() {
 	unsigned i;
@@ -440,7 +440,7 @@ void task_set_key() {
 		ri2 = GV(ukey, d++);
 		ri |= ri2;
 		d = (d >= 8)? 0 : d;
-		
+
 		ri <<= 8;
 		ri2 = GV(ukey, d++);
 		ri |= ri2;
@@ -461,7 +461,7 @@ void task_set_key2() {
 		GV(input, 1) = 0;
 		GV(index2) += 2;
 		GV(next_task) = TASK_REF(task_set_key2);
-		
+
 		TRANSITION_TO(task_encrypt);
 	}
 	else {
@@ -554,9 +554,9 @@ void task_set_key2() {
 
 void task_encrypt() {
 	uint32_t p, l, r, s0, s1, s2, s3, tmp;
-//	unsigned index = *READ(GV(index));
-//	uint8_t* return_to;
-//	struct GV_POINTER(key)* return_to;
+	//	unsigned index = *READ(GV(index));
+	//	uint8_t* return_to;
+	//	struct GV_POINTER(key)* return_to;
 	unsigned index;
 	r = GV(input, 0);
 	l = GV(input, 1);
@@ -592,9 +592,9 @@ void task_encrypt() {
 		s2 = GV(s2, ((r>> 8L)&0xff));
 		s3 = GV(s3, ((r     )&0xff));
 		l^=(((	s0 + 
-			s1)^ 
-			s2)+ 
-			s3)&0xffffffff;
+						s1)^ 
+					s2)+ 
+				s3)&0xffffffff;
 		tmp = r;
 		r = l;
 		l = tmp;
@@ -619,16 +619,16 @@ void task_encrypt() {
 
 void task_start_encrypt() {
 	unsigned i; 
-//	n = *READ(GV(n));
+	//	n = *READ(GV(n));
 	if (GV(n) == 0) {
 		GV(input, 0) =((unsigned long)(GV(iv, 0)))<<24L;
-                GV(input, 0)|=((unsigned long)(GV(iv, 1)))<<16L;
-                GV(input, 0)|=((unsigned long)(GV(iv, 2)))<< 8L;
-                GV(input, 0)|=((unsigned long)(GV(iv, 3)));
+		GV(input, 0)|=((unsigned long)(GV(iv, 1)))<<16L;
+		GV(input, 0)|=((unsigned long)(GV(iv, 2)))<< 8L;
+		GV(input, 0)|=((unsigned long)(GV(iv, 3)));
 		GV(input, 1) =((unsigned long)(GV(iv, 4)))<<24L;
-                GV(input, 1)|=((unsigned long)(GV(iv, 5)))<<16L;
-                GV(input, 1)|=((unsigned long)(GV(iv, 6)))<< 8L;
-                GV(input, 1)|=((unsigned long)(GV(iv, 7)));
+		GV(input, 1)|=((unsigned long)(GV(iv, 5)))<<16L;
+		GV(input, 1)|=((unsigned long)(GV(iv, 6)))<< 8L;
+		GV(input, 1)|=((unsigned long)(GV(iv, 7)));
 		GV(next_task) = TASK_REF(task_start_encrypt2);
 		TRANSITION_TO(task_encrypt);
 	}
@@ -638,13 +638,13 @@ void task_start_encrypt() {
 }
 void task_start_encrypt2() {
 	GV(iv, 0) = (unsigned char)(((GV(input, 0))>>24L)&0xff);
-        GV(iv, 1) = (unsigned char)(((GV(input, 0))>>16L)&0xff);
-        GV(iv, 2) = (unsigned char)(((GV(input, 0))>> 8L)&0xff);
-        GV(iv, 3) = (unsigned char)(((GV(input, 0))     )&0xff);
+	GV(iv, 1) = (unsigned char)(((GV(input, 0))>>16L)&0xff);
+	GV(iv, 2) = (unsigned char)(((GV(input, 0))>> 8L)&0xff);
+	GV(iv, 3) = (unsigned char)(((GV(input, 0))     )&0xff);
 	GV(iv, 4) = (unsigned char)(((GV(input, 1))>>24L)&0xff);
-        GV(iv, 5) = (unsigned char)(((GV(input, 1))>>16L)&0xff);
-        GV(iv, 6) = (unsigned char)(((GV(input, 1))>> 8L)&0xff);
-        GV(iv, 7) = (unsigned char)(((GV(input, 1))     )&0xff);
+	GV(iv, 5) = (unsigned char)(((GV(input, 1))>>16L)&0xff);
+	GV(iv, 6) = (unsigned char)(((GV(input, 1))>> 8L)&0xff);
+	GV(iv, 7) = (unsigned char)(((GV(input, 1))     )&0xff);
 #if VERBOSE > 0
 	for (int i=0; i<8; ++i){
 		LOG("iv[%u]=%u\r\n",i,GV(iv,i));
@@ -685,7 +685,7 @@ static void init_hw()
 
 void init()
 {
-#if BOARD == mspts430
+#ifdef BOARD_MSP_TS430
 	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
 	*timer |= 0x0200; //set 9 to one (SMCLK)
 	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);

@@ -143,7 +143,7 @@ static void init_hw()
 unsigned volatile *timer = &TBCTL;
 void init()
 {
-#if BOARD == mspts430
+#ifdef BOARD_MSP_TS430
 	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
 	*timer |= 0x0200; //set 9 to one (SMCLK)
 	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
@@ -151,7 +151,6 @@ void init()
 	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
 	*timer |= 0x0002; //interrupt enable
 #endif
-	//	*timer &= ~(0x0020); //set bit 5 to zero(halt!)
 	init_hw();
 
 #ifdef CONFIG_EDB
@@ -162,26 +161,6 @@ void init()
 	__enable_interrupt();
 
 	PRINTF(".%u.\r\n", curctx->task->idx);
-}
-
-static void print_hex_ascii(const uint8_t *m, unsigned len)
-{
-	int i, j;
-
-	for (i = 0; i < len; i += PRINT_HEX_ASCII_COLS) {
-		for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j)
-			//printf("%02x ", m[i + j]);
-			for (; j < PRINT_HEX_ASCII_COLS; ++j)
-				//printf("   ");
-				//printf(" ");
-				for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j) {
-					char c = m[i + j];
-					if (!(32 <= c && c <= 127)) // not printable
-						c = '.';
-					//printf("%c", c);
-				}
-		//printf("\r\n");
-	}
 }
 
 void task_init()
@@ -357,25 +336,28 @@ void task_print_cyphertext()
 
 	LOG("print cyphertext: len=%u\r\n", GV(cyphertext_len));
 
-	//ENERGY_GUARD_BEGIN();
 	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-	printf("Cyphertext:\r\n");
+
+	BLOCK_PRINTF_BEGIN();
+	BLOCK_PRINTF("Cyphertext:\r\n");
 	for (i = 0; i < GV(cyphertext_len); ++i) {
 		c = GV(cyphertext, i);
-		PRINTF("%02x ", c);
+		BLOCK_PRINTF("%02x ", c);
 		line[j++] = c;
 		if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
-			PRINTF(" ");
+			BLOCK_PRINTF(" ");
 			for (j = 0; j < PRINT_HEX_ASCII_COLS; ++j) {
 				c = line[j];
 				if (!(32 <= c && c <= 127)) // not printable
 					c = '.';
-				printf("%c", c);
+				BLOCK_PRINTF("%c", c);
 			}
 			j = 0;
-			PRINTF("\r\n");
+			BLOCK_PRINTF("\r\n");
 		}
 	}
+	BLOCK_PRINTF_END();
+
 	exit(0);
 	//TRANSITION_TO(task_init);
 	TRANSITION_TO(task_print_cyphertext);

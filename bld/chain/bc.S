@@ -44,29 +44,13 @@ init:                                   ; @init
 	push.w	r4
 	mov.w	r1, r4
 	sub.w	#6, r1
-	mov.w	&0x03C0, r12
-	and.w	#-6401, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	bis.w	#512, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	bis.w	#192, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	and.w	#-17, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	bis.w	#32, r12
-	mov.w	r12, &0x03C0
-	mov.w	&0x03C0, r12
-	bis.w	#2, r12
-	mov.w	r12, &0x03C0
 	call	#init_hw
-	call	#mspconsole_init
 	;APP
 	eint { nop
 	;NO_APP
+	jmp	.LBB1_1
+.LBB1_1:                                ; %do.body
+	call	#request_non_interactive_debug_mode
 	mov.w	&curctx, r12
 	mov.w	0(r12), r12
 	mov.w	6(r12), r12
@@ -75,6 +59,9 @@ init:                                   ; @init
 	mov.w	#.L.str, 0(r13)
 	call	#printf
 	mov.w	r15, -2(r4)             ; 2-byte Folded Spill
+	call	#resume_application
+	jmp	.LBB1_2
+.LBB1_2:                                ; %do.end
 	add.w	#6, r1
 	pop.w	r4
 	ret
@@ -1725,60 +1712,108 @@ task_end:                               ; @task_end
 	call	#chan_in
 	mov.w	0(r15), r12
 	mov.w	r12, -14(r4)
+	jmp	.LBB12_1
+.LBB12_1:                               ; %do.body
+	call	#request_non_interactive_debug_mode
 	mov.w	&overflow, r12
-	mov.w	&0x03D0, r15
-	mov.w	r1, r13
-	mov.w	r15, 4(r13)
-	mov.w	r12, 2(r13)
-	mov.w	#.L.str.5, 0(r13)
+	mov.w	&0x03D0, r13
+	mov.w	r1, r14
+	mov.w	r13, 4(r14)
+	mov.w	r12, 2(r14)
+	mov.w	#.L.str.5, 0(r14)
 	call	#printf
+	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
+	call	#resume_application
+	jmp	.LBB12_2
+.LBB12_2:                               ; %do.end
+	jmp	.LBB12_3
+.LBB12_3:                               ; %do.body.8
+	call	#request_non_interactive_debug_mode
 	mov.w	-2(r4), r12
 	mov.w	r1, r13
 	mov.w	r12, 2(r13)
 	mov.w	#.L.str.6, 0(r13)
-	mov.w	r15, -16(r4)            ; 2-byte Folded Spill
 	call	#printf
+	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
+	call	#resume_application
+	jmp	.LBB12_4
+.LBB12_4:                               ; %do.end.10
+	jmp	.LBB12_5
+.LBB12_5:                               ; %do.body.11
+	call	#request_non_interactive_debug_mode
 	mov.w	-4(r4), r12
 	mov.w	r1, r13
 	mov.w	r12, 2(r13)
 	mov.w	#.L.str.6, 0(r13)
-	mov.w	r15, -18(r4)            ; 2-byte Folded Spill
 	call	#printf
+	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
+	call	#resume_application
+	jmp	.LBB12_6
+.LBB12_6:                               ; %do.end.13
+	jmp	.LBB12_7
+.LBB12_7:                               ; %do.body.14
+	call	#request_non_interactive_debug_mode
 	mov.w	-6(r4), r12
 	mov.w	r1, r13
 	mov.w	r12, 2(r13)
 	mov.w	#.L.str.6, 0(r13)
-	mov.w	r15, -20(r4)            ; 2-byte Folded Spill
 	call	#printf
+	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
+	call	#resume_application
+	jmp	.LBB12_8
+.LBB12_8:                               ; %do.end.16
+	jmp	.LBB12_9
+.LBB12_9:                               ; %do.body.17
+	call	#request_non_interactive_debug_mode
 	mov.w	-8(r4), r12
 	mov.w	r1, r13
 	mov.w	r12, 2(r13)
 	mov.w	#.L.str.6, 0(r13)
-	mov.w	r15, -22(r4)            ; 2-byte Folded Spill
 	call	#printf
+	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
+	call	#resume_application
+	jmp	.LBB12_10
+.LBB12_10:                              ; %do.end.19
+	jmp	.LBB12_11
+.LBB12_11:                              ; %do.body.20
+	call	#request_non_interactive_debug_mode
 	mov.w	-10(r4), r12
 	mov.w	r1, r13
 	mov.w	r12, 2(r13)
 	mov.w	#.L.str.6, 0(r13)
-	mov.w	r15, -24(r4)            ; 2-byte Folded Spill
 	call	#printf
+	mov.w	r15, -26(r4)            ; 2-byte Folded Spill
+	call	#resume_application
+	jmp	.LBB12_12
+.LBB12_12:                              ; %do.end.22
+	jmp	.LBB12_13
+.LBB12_13:                              ; %do.body.23
+	call	#request_non_interactive_debug_mode
 	mov.w	-12(r4), r12
 	mov.w	r1, r13
 	mov.w	r12, 2(r13)
 	mov.w	#.L.str.6, 0(r13)
-	mov.w	r15, -26(r4)            ; 2-byte Folded Spill
 	call	#printf
+	mov.w	r15, -28(r4)            ; 2-byte Folded Spill
+	call	#resume_application
+	jmp	.LBB12_14
+.LBB12_14:                              ; %do.end.25
+	jmp	.LBB12_15
+.LBB12_15:                              ; %do.body.26
+	call	#request_non_interactive_debug_mode
 	mov.w	-14(r4), r12
 	mov.w	r1, r13
 	mov.w	r12, 2(r13)
 	mov.w	#.L.str.6, 0(r13)
-	mov.w	r15, -28(r4)            ; 2-byte Folded Spill
 	call	#printf
 	mov.w	r15, -30(r4)            ; 2-byte Folded Spill
-	jmp	.LBB12_1
-.LBB12_1:                               ; %while.body
+	call	#resume_application
+	jmp	.LBB12_16
+.LBB12_16:                              ; %do.end.28
+	jmp	.LBB12_17
+.LBB12_17:                              ; %while.body
                                         ; =>This Inner Loop Header: Depth=1
-	jmp	.LBB12_1
+	jmp	.LBB12_17
 .Lfunc_end12:
 	.size	task_end, .Lfunc_end12-task_end
 

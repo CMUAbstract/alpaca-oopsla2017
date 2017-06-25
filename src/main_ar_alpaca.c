@@ -112,7 +112,7 @@ static void init_hw()
 
 void initializeHardware()
 {
-#if BOARD == mspts430
+#ifdef BOARD_MSP_TS430
 	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
 	*timer |= 0x0200; //set 9 to one (SMCLK)
 	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);

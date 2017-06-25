@@ -481,7 +481,7 @@ static void init_accel()
 
 void init()
 {
-#if BOARD == mspts430
+#ifdef BOARD_MSP_TS430
 	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
 	TBCTL |= 0x0200; //set 9 to one (SMCLK)
 	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);

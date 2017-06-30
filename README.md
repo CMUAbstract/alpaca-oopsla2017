@@ -26,8 +26,8 @@ We offer compile.sh file for easy build and flash. To use it, simply type
 Or you can compile step by step using the following instructions.
 
 *If you are using mspts430 and want to use UART, MSP-FET has a bug so that sometimes it fails to
-flash with UART connected. You might want to to step-by-step compilation without UART connected
-and connect UART right before running instead of using compile.sh
+flash with UART connected. You might want to do step-by-step compilation without UART connected
+and connect UART right before hitting run instead of using compile.sh
 
 Build:
 
@@ -42,3 +42,5 @@ Flash:
 	$ mspdebug -v 3300 -d /dev/ttyACM0 tilib
 	$ prog bld/{alpaca,chain,dino}/{ar.cuckoo,rsa,blowfish,cem,bc}.out
 	$ run
+
+Do not forget to build ext/alpaca/LLVM before running. See the README inside that folder.

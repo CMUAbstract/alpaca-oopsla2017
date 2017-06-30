@@ -19,15 +19,25 @@ runtime on wisp, again EDB is a nice choice.
 
 To do accurate run time measurement, remove all PRINTFs.
 
-We offer compile.sh file for easy build and flash. To use it, simply type 
+We offer compile.sh and compile_and_run.sh file for easy build and flash. 
+
+Compile using compile.sh and flash manually (recommanded for mspts430):
 
 	$ ./compile.sh {alpaca,chain,dino} {wisp,mspts430} {ar,cuckoo,rsa,blowfish,cem,bc}
+	$ mspdebug -v 3300 -d /dev/ttyACM0 tilib
+	$ prog bld/{alpaca,chain,dino}/{ar.cuckoo,rsa,blowfish,cem,bc}.out
+	$ run
 
-Or you can compile step by step using the following instructions.
+Compile and run (recommended for WISP):
+
+	$ ./compile_and_run.sh {alpaca,chain,dino} {wisp,mspts430} {ar,cuckoo,rsa,blowfish,cem,bc}
+
 
 *If you are using mspts430 and want to use UART, MSP-FET has a bug so that sometimes it fails to
-flash with UART connected. You might want to do step-by-step compilation without UART connected
-and connect UART right before hitting run instead of using compile.sh
+flash with UART connected. Use compile.sh and connect UART right before hitting run.
+For WISP, use compile_and_run.sh for simplicity.
+
+You can also manually compile and flash as follows.
 
 Build:
 

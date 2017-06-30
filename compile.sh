@@ -1,5 +1,5 @@
 make bld/gcc/depclean
-make bld/gcc/dep
+make bld/gcc/dep BOARD=$2
 make bld/$1/depclean
 make bld/$1/dep BOARD=$2
 make bld/$1/all BOARD=$2 SRC=$3

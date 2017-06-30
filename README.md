@@ -15,9 +15,9 @@ To do accurate run time measurement, remove all PRINTFs.
 
 Build:
 
-	$ make bld/gcc/depclean
-	$ make bld/gcc/dep
-	$ make bld/{alpaca,chain,dino}/depclean
+	$ make bld/gcc/depclean BOARD={wisp,mspts430}
+	$ make bld/gcc/dep BOARD={wisp,mspts430}
+	$ make bld/{alpaca,chain,dino}/depclean BOARD={wisp,mspts430}
 	$ make bld/{alpaca,chain,dino}/dep BOARD={wisp,mspts430}
 	$ make bld/{alpaca,chain,dino)/all BOARD={wisp,mspts430} SRC={ar,cuckoo,rsa,blowfish,cem,bc}
 

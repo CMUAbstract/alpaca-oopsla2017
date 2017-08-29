@@ -1,3 +1,7 @@
 .*.swp
 .*.swo
 *.log
+*.out
+*.map
+*.bc
+*.ll

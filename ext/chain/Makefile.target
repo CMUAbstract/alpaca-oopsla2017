@@ -11,7 +11,7 @@ ALPACA_LIB =
 	$(OPT) -debug -stats \
 	  -o $@ $<
 
-LINK_OBJECTS = $(OBJECTS:.o=.chain.bc)
+#LINK_OBJECTS = $(OBJECTS:.o=.chain.bc)
 
 override DEPS += \
 	libchain \

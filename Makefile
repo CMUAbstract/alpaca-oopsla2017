@@ -1,7 +1,9 @@
 TOOLS = \
+	gcc \
 	dino \
 	mementos \
 	alpaca \
+	clang \
 
 TOOLCHAINS = \
 	gcc \

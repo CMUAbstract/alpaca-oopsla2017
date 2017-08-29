@@ -7,18 +7,19 @@ DEPS += \
 	libmspmath \
 
 # Relative from toolchain build dir (one down from this file's dir)
-ifeq ($(TOOLCHIAN), alpaca)
-SRC_ROOT = ../../src_alpaca
-endif
-ifeq ($(TOOLCHAIN), chain)
-SRC_ROOT = ../../src_chain
-endif
-ifeq ($(TOOLCHAIN), dino)
-SRC_ROOT = ../../src_dino
-endif
-ifeq ($(TOOLCHAIN), clang)
-SRC_ROOT = ../../src_dino
-endif
+#ifeq ($(TOOLCHIAN), alpaca)
+#SRC_ROOT = ../../src_alpaca
+#endif
+#ifeq ($(TOOLCHAIN), chain)
+#SRC_ROOT = ../../src_chain
+#endif
+#ifeq ($(TOOLCHAIN), dino)
+#SRC_ROOT = ../../src_dino
+#endif
+#ifeq ($(TOOLCHAIN), clang)
+#SRC_ROOT = ../../src_dino
+#endif
+SRC_ROOT = ../../src
 
 include $(LIB_ROOT)/libmspbuiltins/bld/Makefile.target
 

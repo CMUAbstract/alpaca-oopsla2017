@@ -12,6 +12,8 @@
 #define REPEAT20(x)     REPEAT16(x),REPEAT4(x)
 #define REPEAT32(x)     REPEAT16(x),REPEAT16(x)
 #define REPEAT33(x)     REPEAT32(x),REPEAT1(x)
+#define REPEAT48(x)     REPEAT32(x),REPEAT16(x)
+#define REPEAT50(x)     REPEAT48(x),REPEAT2(x)
 #define REPEAT64(x)     REPEAT32(x),REPEAT32(x)
 #define REPEAT128(x)    REPEAT64(x),REPEAT64(x)
 #define REPEAT256(x)    REPEAT128(x),REPEAT128(x)

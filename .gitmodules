@@ -37,7 +37,9 @@
 	url = https://github.com/CMUAbstract/libmspprintf.git
 [submodule "ext/libmspmath"]
 	path = ext/libmspmath
-	url = git@github.com:CMUAbstract/libmspmath.git
+    url = https://github.com/CMUAbstract/libmspmath
+#	url = git@github.com:CMUAbstract/libmspmath.git
 [submodule "ext/alpaca"]
 	path = ext/alpaca
-	url = git@github.com:CMUAbstract/alpaca-oopsla.git
+    url = https://github.com/CMUAbstract/alpaca-oopsla
+#	url = git@github.com:CMUAbstract/alpaca-oopsla.git

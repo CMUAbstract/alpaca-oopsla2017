@@ -1,1 +1,3 @@
 theme: jekyll-theme-slate
+title: Try out Alpaca!
+description: Compiler pass and runtime library for fast intermittent-execution on energy harvesting platforms.

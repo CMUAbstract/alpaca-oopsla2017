@@ -25,7 +25,6 @@
 #include <libedb/edb.h>
 #endif
 
-
 #include "pins.h"
 
 #define SEED 4L
@@ -147,7 +146,7 @@ void task_init() {
 
 void task_select_func() {
 	// var func get privatized by the compiler
-	GV(func_bak) = GV(func);
+	PRIV(func);
 	LOG("select func\r\n");
 
 	GV(seed) = (uint32_t)SEED; // for test, seed is always the same
@@ -155,50 +154,50 @@ void task_select_func() {
 	LOG("func: %u\r\n", GV(func_bak));
 	if(GV(func_bak) == 0){
 		GV(func_bak)++;
-		write_to_gbuf((uint8_t*)&GV(func_bak), (uint8_t*)&GV(func), sizeof(GV(func)));
+		COMMIT(func);
 		TRANSITION_TO(task_bit_count);
 	}
 	else if(GV(func_bak) == 1){
 		GV(func_bak)++;
-		write_to_gbuf((uint8_t*)&GV(func_bak), (uint8_t*)&GV(func), sizeof(GV(func)));
+		COMMIT(func);
 		TRANSITION_TO(task_bitcount);
 	}
 	else if(GV(func_bak) == 2){
 		GV(func_bak)++;
-		write_to_gbuf((uint8_t*)&GV(func_bak), (uint8_t*)&GV(func), sizeof(GV(func)));
+		COMMIT(func);
 		TRANSITION_TO(task_ntbl_bitcnt);
 	}
 	else if(GV(func_bak) == 3){
 		GV(func_bak)++;
-		write_to_gbuf((uint8_t*)&GV(func_bak), (uint8_t*)&GV(func), sizeof(GV(func)));
+		COMMIT(func);
 		TRANSITION_TO(task_ntbl_bitcount);
 	}
 	else if(GV(func_bak) == 4){
 		GV(func_bak)++;
-		write_to_gbuf((uint8_t*)&GV(func_bak), (uint8_t*)&GV(func), sizeof(GV(func)));
+		COMMIT(func);
 		TRANSITION_TO(task_BW_btbl_bitcount);
 	}
 	else if(GV(func_bak) == 5){
 		GV(func_bak)++;
-		write_to_gbuf((uint8_t*)&GV(func_bak), (uint8_t*)&GV(func), sizeof(GV(func)));
+		COMMIT(func);
 		TRANSITION_TO(task_AR_btbl_bitcount);
 	}
 	else if(GV(func_bak) == 6){
 		GV(func_bak)++;
-		write_to_gbuf((uint8_t*)&GV(func_bak), (uint8_t*)&GV(func), sizeof(GV(func)));
+		COMMIT(func);
 		TRANSITION_TO(task_bit_shifter);
 	}
 	else{
-		write_to_gbuf((uint8_t*)&GV(func_bak), (uint8_t*)&GV(func), sizeof(GV(func)));
+		COMMIT(func);
 		TRANSITION_TO(task_end);
 	}
 }
 
 void task_bit_count() {
 	// privatize seed, n_0, iter
-	GV(seed_bak) = GV(seed);
-	GV(n_0_bak) = GV(n_0);
-	GV(iter_bak) = GV(iter);
+	PRIV(seed);
+	PRIV(n_0);
+	PRIV(iter);
 
 	LOG("bit_count\r\n");
 	uint32_t tmp_seed = GV(seed_bak);
@@ -211,24 +210,24 @@ void task_bit_count() {
 	GV(iter_bak)++;
 
 	if(GV(iter_bak) < ITER){
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_0_bak), (uint8_t*)&GV(n_0), sizeof(GV(n_0)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_0);
+		COMMIT(iter);
 		TRANSITION_TO(task_bit_count);
 	}
 	else{
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_0_bak), (uint8_t*)&GV(n_0), sizeof(GV(n_0)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_0);
+		COMMIT(iter);
 		TRANSITION_TO(task_select_func);
 	}
 }
 
 void task_bitcount() {
 	// privatize seed, n_1, iter
-	GV(seed_bak) = GV(seed);
-	GV(n_1_bak) = GV(n_1);
-	GV(iter_bak) = GV(iter);
+	PRIV(seed);
+	PRIV(n_1);
+	PRIV(iter);
 
 	LOG("bitcount\r\n");
 	uint32_t tmp_seed = GV(seed_bak);
@@ -242,15 +241,15 @@ void task_bitcount() {
 	GV(iter_bak)++;
 
 	if(GV(iter_bak) < ITER){
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_1_bak), (uint8_t*)&GV(n_1), sizeof(GV(n_1)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_1);
+		COMMIT(iter);
 		TRANSITION_TO(task_bitcount);
 	}
 	else{
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_1_bak), (uint8_t*)&GV(n_1), sizeof(GV(n_1)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_1);
+		COMMIT(iter);
 		TRANSITION_TO(task_select_func);
 	}
 }
@@ -266,9 +265,9 @@ int recursive_cnt(uint32_t x){
 
 void task_ntbl_bitcnt() {
 	// privatize seed, n_2, iter
-	GV(seed_bak) = GV(seed);
-	GV(n_2_bak) = GV(n_2);
-	GV(iter_bak) = GV(iter);
+	PRIV(seed);
+	PRIV(n_2);
+	PRIV(iter);
 
 	LOG("ntbl_bitcnt\r\n");
 	GV(n_2_bak) += recursive_cnt(GV(seed_bak));
@@ -276,24 +275,24 @@ void task_ntbl_bitcnt() {
 	GV(iter_bak)++;
 
 	if(GV(iter_bak) < ITER){
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_2_bak), (uint8_t*)&GV(n_2), sizeof(GV(n_2)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_2);
+		COMMIT(iter);
 		TRANSITION_TO(task_ntbl_bitcnt);
 	}
 	else{
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_2_bak), (uint8_t*)&GV(n_2), sizeof(GV(n_2)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_2);
+		COMMIT(iter);
 		TRANSITION_TO(task_select_func);
 	}
 }
 
 void task_ntbl_bitcount() {
 	// privatize seed, n_3, iter
-	GV(seed_bak) = GV(seed);
-	GV(n_3_bak) = GV(n_3);
-	GV(iter_bak) = GV(iter);
+	PRIV(seed);
+	PRIV(n_3);
+	PRIV(iter);
 
 	LOG("ntbl_bitcount\r\n");
 	GV(n_3_bak) += bits[ (int) (GV(seed_bak) & 0x0000000FUL)       ] +
@@ -308,24 +307,24 @@ void task_ntbl_bitcount() {
 	GV(iter_bak)++;
 
 	if(GV(iter_bak) < ITER){
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_3_bak), (uint8_t*)&GV(n_3), sizeof(GV(n_3)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_3);
+		COMMIT(iter);
 		TRANSITION_TO(task_ntbl_bitcount);
 	}
 	else{
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_3_bak), (uint8_t*)&GV(n_3), sizeof(GV(n_3)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_3);
+		COMMIT(iter);
 		TRANSITION_TO(task_select_func);
 	}
 }
 
 void task_BW_btbl_bitcount() {
 	// privatize seed, n_4, iter
-	GV(seed_bak) = GV(seed);
-	GV(n_4_bak) = GV(n_4);
-	GV(iter_bak) = GV(iter);
+	PRIV(seed);
+	PRIV(n_4);
+	PRIV(iter);
 
 	LOG("BW_btbl_bitcount\r\n");
 	union
@@ -342,24 +341,24 @@ void task_BW_btbl_bitcount() {
 	GV(iter_bak)++;
 
 	if(GV(iter_bak) < ITER){
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_4_bak), (uint8_t*)&GV(n_4), sizeof(GV(n_4)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_4);
+		COMMIT(iter);
 		TRANSITION_TO(task_BW_btbl_bitcount);
 	}
 	else{
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_4_bak), (uint8_t*)&GV(n_4), sizeof(GV(n_4)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_4);
+		COMMIT(iter);
 		TRANSITION_TO(task_select_func);
 	}
 }
 
 void task_AR_btbl_bitcount() {
 	// privatize seed, n_5, iter
-	GV(seed_bak) = GV(seed);
-	GV(n_5_bak) = GV(n_5);
-	GV(iter_bak) = GV(iter);
+	PRIV(seed);
+	PRIV(n_5);
+	PRIV(iter);
 
 	LOG("AR_btbl_bitcount\r\n");
 	unsigned char * Ptr = (unsigned char *) &GV(seed_bak) ;
@@ -374,24 +373,24 @@ void task_AR_btbl_bitcount() {
 	GV(iter_bak)++;
 
 	if(GV(iter_bak) < ITER){
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_5_bak), (uint8_t*)&GV(n_5), sizeof(GV(n_5)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_5);
+		COMMIT(iter);
 		TRANSITION_TO(task_AR_btbl_bitcount);
 	}
 	else{
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_5_bak), (uint8_t*)&GV(n_5), sizeof(GV(n_5)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_5);
+		COMMIT(iter);
 		TRANSITION_TO(task_select_func);
 	}
 }
 
 void task_bit_shifter() {
 	// privatize seed, n_6, iter
-	GV(seed_bak) = GV(seed);
-	GV(n_6_bak) = GV(n_6);
-	GV(iter_bak) = GV(iter);
+	PRIV(seed);
+	PRIV(n_6);
+	PRIV(iter);
 
 	LOG("bit_shifter\r\n");
 	int i, nn;
@@ -404,15 +403,15 @@ void task_bit_shifter() {
 	GV(iter_bak)++;
 
 	if(GV(iter_bak) < ITER){
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_6_bak), (uint8_t*)&GV(n_6), sizeof(GV(n_6)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_6);
+		COMMIT(iter);
 		TRANSITION_TO(task_bit_shifter);
 	}
 	else{
-		write_to_gbuf((uint8_t*)&GV(seed_bak), (uint8_t*)&GV(seed), sizeof(GV(seed)));
-		write_to_gbuf((uint8_t*)&GV(n_6_bak), (uint8_t*)&GV(n_6), sizeof(GV(n_6)));
-		write_to_gbuf((uint8_t*)&GV(iter_bak), (uint8_t*)&GV(iter), sizeof(GV(iter)));
+		COMMIT(seed);
+		COMMIT(n_6);
+		COMMIT(iter);
 		TRANSITION_TO(task_select_func);
 	}
 }

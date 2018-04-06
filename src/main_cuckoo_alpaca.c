@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <param.h>
 
 #include <msp430.h>
 #include <stdint.h>
@@ -7,7 +8,16 @@
 
 #include <libalpaca/alpaca.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define BLOCK_PRINTF(...)
+#define BLOCK_PRINTF_BEGIN(...)
+#define BLOCK_PRINTF_END(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -19,27 +29,9 @@
 
 #include "pins.h"
 
-// timer for measuring performance
-unsigned volatile *timer = &TBCTL;
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-	void TimerB1_ISR(void){
-		TBCTL &= ~(0x0002);
-		if(TBCTL && 0x0001){
-			overflow++;
-			TBCTL |= 0x0004;
-			TBCTL |= (0x0002);
-			TBCTL &= ~(0x0001);	
-		}
-	}
-
-//unsigned count = 0;
-
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
-
 #define NUM_INSERTS (NUM_BUCKETS / 4) // shoot for 25% occupancy
 #define NUM_LOOKUPS NUM_INSERTS
+//#define NUM_BUCKETS 512 // must be a power of 2
 #define NUM_BUCKETS 128 // must be a power of 2
 #define MAX_RELOCATIONS 8
 #define BUFFER_SIZE 32
@@ -74,6 +66,27 @@ TASK(12, task_lookup_done)
 TASK(13, task_print_stats)
 TASK(14, task_done)
 TASK(15, task_init_array)
+
+/* This is originally done by the compiler */
+__nv uint8_t* data_src[131];
+__nv uint8_t* data_dest[131];
+__nv unsigned data_size[131];
+GLOBAL_SB(fingerprint_t, filter_bak, NUM_BUCKETS);
+GLOBAL_SB(uint16_t, filter_isDirty, NUM_BUCKETS);
+GLOBAL_SB(value_t, insert_count_bak);
+GLOBAL_SB(value_t, lookup_count_bak);
+GLOBAL_SB(value_t, inserted_count_bak);
+GLOBAL_SB(value_t, member_count_bak);
+GLOBAL_SB(value_t, key_bak);
+GLOBAL_SB(index_t, index_bak);
+GLOBAL_SB(fingerprint_t, fingerprint_bak);
+GLOBAL_SB(value_t, index1_bak);
+GLOBAL_SB(value_t, relocation_count_bak);
+void clear_isDirty() {
+	PRINTF("clear\r\n");
+	memset(&GV(filter_isDirty, 0), 0, sizeof(_global_filter_isDirty));
+}
+/* end */
 
 GLOBAL_SB(fingerprint_t, filter, NUM_BUCKETS);
 GLOBAL_SB(index_t, index);
@@ -117,6 +130,13 @@ static fingerprint_t hash_to_fingerprint(value_t key)
 
 void task_init()
 {
+#ifdef LOGIC
+	// Out high
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	// Out low
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+#endif
+	PRINTF("start\r\n");
 	unsigned i;
 	for (i = 0; i < NUM_BUCKETS ; ++i) {
 		GV(filter, i) = 0;
@@ -127,33 +147,41 @@ void task_init()
 	GV(member_count) = 0;
 	GV(key) = init_key;
 	GV(next_task) = TASK_REF(task_insert);
-	LOG("init end!!\r\n");
 	TRANSITION_TO(task_generate_key);
 }
+
 void task_init_array() {
+	// privatize index
+	PRIV(index);
+
 	LOG("init array start\r\n");
 	unsigned i;
 	for (i = 0; i < BUFFER_SIZE - 1; ++i) {
-		GV(filter, i + _global_index*(BUFFER_SIZE-1)) = 0;
+		GV(filter, i + _global_index_bak*(BUFFER_SIZE-1)) = 0;
 	}
-	++GV(index);
-	if (GV(index) == NUM_BUCKETS/(BUFFER_SIZE-1)) {
+	++GV(index_bak);
+	if (GV(index_bak) == NUM_BUCKETS/(BUFFER_SIZE-1)) {
+		COMMIT(index);
 		TRANSITION_TO(task_generate_key);
 	}
 	else {
+		COMMIT(index);
 		TRANSITION_TO(task_init_array);
 	}
 }
+
 void task_generate_key()
 {
+	PRIV(key)
 	LOG("generate key start\r\n");
 
 	// insert pseufo-random integers, for testing
 	// If we use consecutive ints, they hash to consecutive DJB hashes...
 	// NOTE: we are not using rand(), to have the sequence available to verify
 	// that that are no false negatives (and avoid having to save the values).
-	GV(key) = (GV(key) + 1) * 17;
-	LOG("generate_key: key: %x\r\n", GV(key));
+	GV(key_bak) = (GV(key_bak) + 1) * 17;
+	LOG("generate_key: key: %x\r\n", GV(key_bak));
+	COMMIT(key);
 	transition_to(GV(next_task));
 }
 
@@ -193,46 +221,60 @@ void task_insert()
 
 void task_add()
 {
+	PRIV(index1);
+	PRIV(fingerprint);
 	// Fingerprint being inserted
-	LOG("add: fp %04x\r\n", GV(fingerprint));
+	LOG("add: fp %04x\r\n", GV(fingerprint_bak));
 
-	// index1,fp1 and index2,fp2 are the two alternative buckets
-	LOG("add: idx1 %u fp1 %04x\r\n", GV(index1), GV(filter, _global_index1));
-
-	if (!GV(filter, _global_index1)) {
-		LOG("add: filled empty slot at idx1 %u\r\n", GV(index1));
+	DY_PRIV(filter, _global_index1_bak);
+	if (!GV(filter_bak, _global_index1_bak)) {
+		LOG("add: filled empty slot at idx1 %u\r\n", GV(index1_bak));
 
 		GV(success) = true;
-		GV(filter, _global_index1) = GV(fingerprint);
+		GV(filter_bak, _global_index1_bak) = GV(fingerprint_bak);
+		DY_COMMIT(filter, _global_index1_bak);
+
+		COMMIT(index1);
+		COMMIT(fingerprint);
 		TRANSITION_TO(task_insert_done);
 	} else {
-		LOG("add: fp2 %04x\r\n", GV(filter, _global_index2));
-		if (!GV(filter, _global_index2)) {
+		DY_PRIV(filter, _global_index2);
+		if (!GV(filter_bak, _global_index2)) {
 			LOG("add: filled empty slot at idx2 %u\r\n", GV(index2));
 
 			GV(success) = true;
-			GV(filter, _global_index2) = GV(fingerprint);
+			GV(filter_bak, _global_index2) = GV(fingerprint_bak);
+			DY_COMMIT(filter, _global_index2);
+
+			COMMIT(index1);
+			COMMIT(fingerprint);
 			TRANSITION_TO(task_insert_done);
 		} else { // evict one of the two entries
 			fingerprint_t fp_victim;
 			index_t index_victim;
 
 			if (rand() % 2) {
-				index_victim = GV(index1);
-				fp_victim = GV(filter, _global_index1);
+				index_victim = GV(index1_bak);
+				DY_PRIV(filter, _global_index1_bak);
+				fp_victim = GV(filter_bak, _global_index1_bak);
 			} else {
 				index_victim = GV(index2);
-				fp_victim = GV(filter, _global_index2);
+				DY_PRIV(filter, _global_index2);
+				fp_victim = GV(filter_bak, _global_index2);
 			}
 
 			LOG("add: evict [%u] = %04x\r\n", index_victim, fp_victim);
 
 			// Evict the victim
-			GV(filter, index_victim) = GV(fingerprint);
-			GV(index1) = index_victim;
-			GV(fingerprint) = fp_victim;
+			GV(filter_bak, index_victim) = GV(fingerprint_bak);
+			DY_COMMIT(filter, index_victim);
+
+			GV(index1_bak) = index_victim;
+			GV(fingerprint_bak) = fp_victim;
 			GV(relocation_count) = 0;
 
+			COMMIT(index1);
+			COMMIT(fingerprint);
 			TRANSITION_TO(task_relocate);
 		}
 	}
@@ -240,64 +282,87 @@ void task_add()
 
 void task_relocate()
 {
-	fingerprint_t fp_victim = GV(fingerprint);
+	PRIV(fingerprint);
+	PRIV(index1);
+	PRIV(relocation_count);
+
+	fingerprint_t fp_victim = GV(fingerprint_bak);
 	index_t fp_hash_victim = hash_to_index(fp_victim);
-	index_t index2_victim = GV(index1) ^ fp_hash_victim;
+	index_t index2_victim = GV(index1_bak) ^ fp_hash_victim;
 
+	LOG("victim: %04x\r\n", fp_victim);
 	LOG("relocate: victim fp hash %04x idx1 %u idx2 %u\r\n",
-			fp_hash_victim, GV(index1), index2_victim);
+			fp_hash_victim, GV(index1_bak), index2_victim);
 
-	LOG("relocate: next victim fp %04x\r\n", GV(filter, index2_victim));
-
-
-	if (!GV(filter, index2_victim)) { // slot was free
+	DY_PRIV(filter, index2_victim);
+	if (!GV(filter_bak, index2_victim)) { // slot was free
 		GV(success) = true;
-		GV(filter, index2_victim) = fp_victim;
+		GV(filter_bak, index2_victim) = fp_victim;
+		DY_COMMIT(filter, index2_victim);
+
+		COMMIT(fingerprint);
+		COMMIT(index1);
+		COMMIT(relocation_count);
 		TRANSITION_TO(task_insert_done);
 	} else { // slot was occupied, rellocate the next victim
 
-		LOG("relocate: relocs %u\r\n", GV(relocation_count));
+		LOG("relocate: relocs %u\r\n", GV(relocation_count_bak));
 
-		if (GV(relocation_count) >= MAX_RELOCATIONS) { // insert failed
-			PRINTF("relocate: max relocs reached: %u\r\n", GV(relocation_count));
+		if (GV(relocation_count_bak) >= MAX_RELOCATIONS) { // insert failed
+			PRINTF("relocate: max relocs reached: %u\r\n", GV(relocation_count_bak));
 			GV(success) = false;
+			COMMIT(fingerprint);
+			COMMIT(index1);
+			COMMIT(relocation_count);
 			TRANSITION_TO(task_insert_done);
 		}
 
-		++GV(relocation_count);
-		GV(index1) = index2_victim;
-		GV(fingerprint) = GV(filter, index2_victim);
-		GV(filter, index2_victim) = fp_victim;
+		++GV(relocation_count_bak);
+		GV(index1_bak) = index2_victim;
+
+		DY_PRIV(filter, index2_victim);
+		GV(fingerprint_bak) = GV(filter_bak, index2_victim);
+		GV(filter_bak, index2_victim) = fp_victim;
+		DY_COMMIT(filter, index2_victim);
+
+		COMMIT(fingerprint);
+		COMMIT(index1);
+		COMMIT(relocation_count);
 		TRANSITION_TO(task_relocate);
 	}
 }
 
 void task_insert_done()
 {
-#if VERBOSE > 0
+	PRIV(insert_count);
+	PRIV(inserted_count);
+
+	++GV(insert_count_bak);
+	GV(inserted_count_bak) += GV(success);
+
+	LOG("insert done: insert %u inserted %u\r\n", GV(insert_count_bak), GV(inserted_count_bak));
+
 	unsigned i;
-
-	LOG("insert done: filter:\r\n");
+	BLOCK_LOG_BEGIN();
 	for (i = 0; i < NUM_BUCKETS; ++i) {
-
-		LOG("%04x ", GV(filter, i));
+		BLOCK_LOG("%04x ", _global_filter[i]);
 		if (i > 0 && (i + 1) % 8 == 0)
-			LOG("\r\n");
+			BLOCK_LOG("\r\n");
 	}
-	LOG("\r\n");
-#endif
+	BLOCK_LOG_END();
 
-	++GV(insert_count);
-	GV(inserted_count) += GV(success);
-
-	LOG("insert done: insert %u inserted %u\r\n", GV(insert_count), GV(inserted_count));
-
-	if (GV(insert_count) < NUM_INSERTS) {
+	if (GV(insert_count_bak) < NUM_INSERTS) {
 		GV(next_task) = TASK_REF(task_insert);
+
+		COMMIT(insert_count);
+		COMMIT(inserted_count);
 		TRANSITION_TO(task_generate_key);
 	} else {
 		GV(next_task) = TASK_REF(task_lookup);
 		GV(key) = init_key;
+
+		COMMIT(insert_count);
+		COMMIT(inserted_count);
 		TRANSITION_TO(task_generate_key);
 	}
 }
@@ -338,15 +403,23 @@ void task_lookup_search()
 
 void task_lookup_done()
 {
-	++GV(lookup_count);
+	PRIV(lookup_count);
+	PRIV(member_count);
 
-	GV(member_count) += GV(member);
-	LOG("lookup done: lookups %u members %u\r\n", GV(lookup_count), GV(member_count));
+	++GV(lookup_count_bak);
 
-	if (GV(lookup_count) < NUM_LOOKUPS) {
+	GV(member_count_bak) += GV(member);
+	LOG("lookup done: lookups %u members %u\r\n", GV(lookup_count_bak), GV(member_count_bak));
+
+	if (GV(lookup_count_bak) < NUM_LOOKUPS) {
 		GV(next_task) = TASK_REF(task_lookup);
+
+		COMMIT(lookup_count);
+		COMMIT(member_count);
 		TRANSITION_TO(task_generate_key);
 	} else {
+		COMMIT(lookup_count);
+		COMMIT(member_count);
 		TRANSITION_TO(task_print_stats);
 	}
 }
@@ -354,17 +427,18 @@ void task_lookup_done()
 void task_print_stats()
 {
 	unsigned i;
-
-	PRINTF("REAL TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-	BLOCK_PRINTF_BEGIN();
-	BLOCK_PRINTF("filter:\r\n");
-	for (i = 0; i < NUM_BUCKETS; ++i) {
-		BLOCK_PRINTF("%04x ", GV(filter, i));
-		if (i > 0 && (i + 1) % 8 == 0){
-			BLOCK_PRINTF("\r\n");
-		}
-	}
-	BLOCK_PRINTF_END();
+	//
+	PRINTF("end\r\n");
+	//PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
+	//	BLOCK_PRINTF_BEGIN();
+	//	BLOCK_PRINTF("filter:\r\n");
+	//	for (i = 0; i < NUM_BUCKETS; ++i) {
+	//		BLOCK_PRINTF("%04x ", GV(filter, i));
+	//		if (i > 0 && (i + 1) % 8 == 0){
+	//			BLOCK_PRINTF("\r\n");
+	//		}
+	//	}
+	//	BLOCK_PRINTF_END();
 	PRINTF("stats: inserts %u members %u total %u\r\n",
 			GV(inserted_count), GV(member_count), NUM_INSERTS);
 	TRANSITION_TO(task_done);
@@ -372,12 +446,7 @@ void task_print_stats()
 
 void task_done()
 {
-//	count++;
-//	if(count == 5){
-//		count = 0;
-		exit(0);
-//	}
-//	TRANSITION_TO(task_init);
+	TRANSITION_TO(task_init);
 }
 static void init_hw()
 {
@@ -388,16 +457,6 @@ static void init_hw()
 
 void init()
 {
-	// set timer for measuring time
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-#endif
-	//	*timer &= ~(0x0020); //set bit 5 to zero(halt!)
 	init_hw();
 
 #ifdef CONFIG_EDB
@@ -408,8 +467,24 @@ void init()
 
 	__enable_interrupt();
 
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+	// Output enabled
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+	//
+	// Out high
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	// Out low
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+
 	PRINTF(".%u.\r\n", curctx->task->idx);
 }
 
-	ENTRY_TASK(task_init)
+ENTRY_TASK(task_init)
 INIT_FUNC(init)

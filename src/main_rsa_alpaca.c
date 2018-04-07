@@ -1,4 +1,5 @@
 #include <msp430.h>
+#include <param.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -7,7 +8,16 @@
 //#include <wisp-base.h>
 #include <libalpaca/alpaca.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define BLOCK_PRINTF(...)
+#define BLOCK_PRINTF_BEGIN(...)
+#define BLOCK_PRINTF_END(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -26,6 +36,7 @@
 //#include "../data/keysize.h"
 
 #define KEY_SIZE_BITS    64
+//#define KEY_SIZE_BITS    256
 #define DIGIT_BITS       8 // arithmetic ops take 8-bit args produce 16-bit result
 #define DIGIT_MASK       0x00ff
 #define NUM_DIGITS       (KEY_SIZE_BITS / DIGIT_BITS)
@@ -39,34 +50,11 @@ typedef struct {
 	digit_t e;  // exponent
 } pubkey_t;
 
+#define PRINT_HEX_ASCII_COLS 8
 #if NUM_DIGITS < 2
 #error The modular reduction implementation requires at least 2 digits
 #endif
 
-#define LED1 (1 << 0)
-#define LED2 (1 << 1)
-
-#define SEC_TO_CYCLES 4000000 /* 4 MHz */
-
-#define BLINK_DURATION_BOOT (5 * SEC_TO_CYCLES)
-#define BLINK_DURATION_TASK SEC_TO_CYCLES
-#define BLINK_BLOCK_DONE    (1 * SEC_TO_CYCLES)
-#define BLINK_MESSAGE_DONE  (2 * SEC_TO_CYCLES)
-
-#define PRINT_HEX_ASCII_COLS 8
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 // #define SHOW_PROGRESS_ON_LED
 // #define SHOW_COARSE_PROGRESS_ON_LED
 
@@ -92,47 +80,65 @@ static __ro_nv const unsigned char PLAINTEXT[] =
 #define CYPHERTEXT_SIZE (NUM_PLAINTEXT_BLOCKS * NUM_DIGITS)
 
 
-	TASK(1,  task_init)
-	TASK(2,  task_pad)
-	TASK(3,  task_exp)
-	TASK(4,  task_mult_block)
-	TASK(5,  task_mult_block_get_result)
-	TASK(6,  task_square_base)
-	TASK(7,  task_square_base_get_result)
-	TASK(8,  task_print_cyphertext)
-	TASK(9,  task_mult_mod)
-	TASK(10, task_mult)
-	TASK(11, task_reduce_digits)
-	TASK(12, task_reduce_normalizable)
-	TASK(13, task_reduce_normalize)
-	TASK(14, task_reduce_n_divisor)
-	TASK(15, task_reduce_quotient)
-	TASK(16, task_reduce_multiply)
-	TASK(17, task_reduce_compare)
-	TASK(18, task_reduce_add)
-	TASK(19, task_reduce_subtract)
+TASK(1,  task_init)
+TASK(2,  task_pad)
+TASK(3,  task_exp)
+TASK(4,  task_mult_block)
+TASK(5,  task_mult_block_get_result)
+TASK(6,  task_square_base)
+TASK(7,  task_square_base_get_result)
+TASK(8,  task_print_cyphertext)
+TASK(9,  task_mult_mod)
+TASK(10, task_mult)
+TASK(11, task_reduce_digits)
+TASK(12, task_reduce_normalizable)
+TASK(13, task_reduce_normalize)
+TASK(14, task_reduce_n_divisor)
+TASK(15, task_reduce_quotient)
+TASK(16, task_reduce_multiply)
+TASK(17, task_reduce_compare)
+TASK(18, task_reduce_add)
+TASK(19, task_reduce_subtract)
 TASK(20, task_print_product)
 
-	GLOBAL_SB(digit_t, product, 32);
-	GLOBAL_SB(digit_t, exponent);
-	GLOBAL_SB(digit_t, exponent_next);
-	GLOBAL_SB(unsigned, block_offset);
-	GLOBAL_SB(unsigned, message_length);
-	GLOBAL_SB(unsigned, cyphertext_len);
-	GLOBAL_SB(digit_t, base, 32);
-	GLOBAL_SB(digit_t, modulus, NUM_DIGITS);
-	GLOBAL_SB(digit_t, digit);
-	GLOBAL_SB(digit_t, carry);
-	GLOBAL_SB(unsigned, reduce);
-	GLOBAL_SB(digit_t, cyphertext, CYPHERTEXT_SIZE);
-	GLOBAL_SB(unsigned, offset);
-	GLOBAL_SB(digit_t, n_div);
-	GLOBAL_SB(task_t*, next_task);
-	GLOBAL_SB(digit_t, product2, 32);
-	GLOBAL_SB(task_t*, next_task_print);
-	GLOBAL_SB(digit_t, block, 32);
-	GLOBAL_SB(unsigned, quotient);
-	GLOBAL_SB(bool, print_which);
+/* This is originally done by the compiler */
+__nv uint8_t* data_src[16];
+__nv uint8_t* data_dest[16];
+__nv unsigned data_size[16];
+GLOBAL_SB(unsigned, block_offset_bak);
+GLOBAL_SB(unsigned, cyphertext_len_bak);
+GLOBAL_SB(digit_t, exponent_bak);
+GLOBAL_SB(digit_t, product_bak, NUM_DIGITS*2);
+GLOBAL_SB(unsigned, product_isDirty, NUM_DIGITS*2);
+GLOBAL_SB(digit_t, digit_bak);
+GLOBAL_SB(digit_t, carry_bak);
+GLOBAL_SB(unsigned, reduce_bak);
+GLOBAL_SB(unsigned, quotient_bak);
+void clear_isDirty() {
+	memset(&GV(product_isDirty, 0), 0, sizeof(_global_product_isDirty));
+}
+/* end */
+
+GLOBAL_SB(digit_t, product, NUM_DIGITS*2);
+GLOBAL_SB(digit_t, exponent);
+GLOBAL_SB(digit_t, exponent_next);
+GLOBAL_SB(unsigned, block_offset);
+GLOBAL_SB(unsigned, message_length);
+GLOBAL_SB(unsigned, cyphertext_len);
+GLOBAL_SB(digit_t, base, NUM_DIGITS*2);
+GLOBAL_SB(digit_t, modulus, NUM_DIGITS);
+GLOBAL_SB(digit_t, digit);
+GLOBAL_SB(digit_t, carry);
+GLOBAL_SB(unsigned, reduce);
+GLOBAL_SB(digit_t, cyphertext, CYPHERTEXT_SIZE);
+GLOBAL_SB(unsigned, offset);
+GLOBAL_SB(digit_t, n_div);
+GLOBAL_SB(task_t*, next_task);
+GLOBAL_SB(digit_t, product2, NUM_DIGITS*2);
+GLOBAL_SB(task_t*, next_task_print);
+GLOBAL_SB(digit_t, block, NUM_DIGITS*2);
+GLOBAL_SB(unsigned, quotient);
+GLOBAL_SB(bool, print_which);
 
 static void init_hw()
 {
@@ -140,31 +146,45 @@ static void init_hw()
 	msp_gpio_unlock();
 	msp_clock_setup();
 }
-unsigned volatile *timer = &TBCTL;
 void init()
 {
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-#endif
 	init_hw();
 
 #ifdef CONFIG_EDB
-	edb_init();
+	//	edb_init();
 #endif
-	INIT_CONSOLE();
+	//	INIT_CONSOLE();
 
 	__enable_interrupt();
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+	// Output enabled
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+	//
+	// Out high
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	// Out low
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
 
 	PRINTF(".%u.\r\n", curctx->task->idx);
 }
 
 void task_init()
 {
+#ifdef LOGIC
+	// Out high
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	// Out low
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+#endif
+	PRINTF("start\r\n");
+
 	int i;
 	unsigned message_length = sizeof(PLAINTEXT) - 1; // skip the terminating null byte
 
@@ -192,26 +212,20 @@ void task_init()
 
 void task_pad()
 {
+	PRIV(block_offset);
 	int i;
 
-	LOG("pad: len=%u offset=%u\r\n", GV(message_length), GV(block_offset));
+	LOG("pad: len=%u offset=%u\r\n", GV(message_length), GV(block_offset_bak));
 
-	if (GV(block_offset) >= GV(message_length)) {
+	if (GV(block_offset_bak) >= GV(message_length)) {
 		LOG("pad: message done\r\n");
+		COMMIT(block_offset);
 		TRANSITION_TO(task_print_cyphertext);
 	}
 
-	LOG("process block: padded block at offset=%u: ", GV(block_offset));
-	for (i = 0; i < NUM_PAD_DIGITS; ++i)
-		LOG("%x ", PAD_DIGITS[i]);
-	LOG("'");
-	for (i = NUM_DIGITS - NUM_PAD_DIGITS - 1; i >= 0; --i)
-		LOG("%x ", PLAINTEXT[GV(block_offset) + i]);
-	LOG("\r\n");
-
 	digit_t zero = 0;
 	for (i = 0; i < NUM_DIGITS - NUM_PAD_DIGITS; ++i) {
-		GV(base, i) = (GV(block_offset) + i < GV(message_length)) ? PLAINTEXT[GV(block_offset) + i] : 0xFF;
+		GV(base, i) = (GV(block_offset_bak) + i < GV(message_length)) ? PLAINTEXT[GV(block_offset_bak) + i] : 0xFF;
 	}
 	for (i = NUM_DIGITS - NUM_PAD_DIGITS; i < NUM_DIGITS; ++i) {
 		GV(base, i) = 1;
@@ -220,26 +234,26 @@ void task_pad()
 	for (i = 1; i < NUM_DIGITS; ++i)
 		GV(block, i) = 0;
 
-	//GV(exponent_next) = GV(exponent);
 	GV(exponent) = pubkey.e;
 
-	GV(block_offset) += NUM_DIGITS - NUM_PAD_DIGITS;
+	GV(block_offset_bak) += NUM_DIGITS - NUM_PAD_DIGITS;
 
+	COMMIT(block_offset);
 	TRANSITION_TO(task_exp);
 }
 
 void task_exp()
 {
-	LOG("exp: e=%x\r\n", GV(exponent));
+	PRIV(exponent);
+	LOG("exp: e=%x\r\n", GV(exponent_bak));
 
-	// ASSERT: e > 0
-
-
-	if (GV(exponent) & 0x1) {
-		GV(exponent) >>= 1;
+	if (GV(exponent_bak) & 0x1) {
+		GV(exponent_bak) >>= 1;
+		COMMIT(exponent);
 		TRANSITION_TO(task_mult_block);
 	} else {
-		GV(exponent) >>= 1;
+		GV(exponent_bak) >>= 1;
+		COMMIT(exponent);
 		TRANSITION_TO(task_square_base);
 	}
 }
@@ -257,6 +271,7 @@ void task_mult_block()
 
 void task_mult_block_get_result()
 {
+	PRIV(cyphertext_len);
 	int i;
 
 	LOG("mult block get result: block: ");
@@ -272,34 +287,35 @@ void task_mult_block_get_result()
 		// TODO: current implementation restricts us to send only to the next instantiation
 		// of self, so for now, as a workaround, we proxy the value in every instantiation
 
+		COMMIT(cyphertext_len);
 		TRANSITION_TO(task_square_base);
 
 	} else { // block is finished, save it
-		LOG("mult block get result: cyphertext len=%u\r\n", GV(cyphertext_len));
+		LOG("mult block get result: cyphertext len=%u\r\n", GV(cyphertext_len_bak));
 
-		if (GV(cyphertext_len) + NUM_DIGITS <= CYPHERTEXT_SIZE) {
+		if (GV(cyphertext_len_bak) + NUM_DIGITS <= CYPHERTEXT_SIZE) {
 
 			for (i = 0; i < NUM_DIGITS; ++i) { // reverse for printing
 				// TODO: we could save this read by rolling this loop into the
 				// above loop, by paying with an extra conditional in the
 				// above-loop.
-				GV(cyphertext, _global_cyphertext_len) = GV(product, i);
-				++GV(cyphertext_len);
+				GV(cyphertext, _global_cyphertext_len_bak) = GV(product, i);
+				++GV(cyphertext_len_bak);
 			}
 
 		} else {
-			printf("WARN: block dropped: cyphertext overlow [%u > %u]\r\n",
-					GV(cyphertext_len) + NUM_DIGITS, CYPHERTEXT_SIZE);
+			PRINTF("WARN: block dropped: cyphertext overlow [%u > %u]\r\n",
+					GV(cyphertext_len_bak) + NUM_DIGITS, CYPHERTEXT_SIZE);
 			// carry on encoding, though
 		}
 
 		// TODO: implementation limitation: cannot multicast and send to self
 		// in the same macro
 
-		LOG("mult block get results: block done, cyphertext_len=%u\r\n", GV(cyphertext_len));
+		LOG("mult block get results: block done, cyphertext_len=%u\r\n", GV(cyphertext_len_bak));
+		COMMIT(cyphertext_len);
 		TRANSITION_TO(task_pad);
 	}
-
 }
 
 // TODO: is this task necessary? it seems to act as nothing but a proxy
@@ -336,7 +352,7 @@ void task_print_cyphertext()
 
 	LOG("print cyphertext: len=%u\r\n", GV(cyphertext_len));
 
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
+	PRINTF("end\r\n");
 
 	BLOCK_PRINTF_BEGIN();
 	BLOCK_PRINTF("Cyphertext:\r\n");
@@ -357,10 +373,7 @@ void task_print_cyphertext()
 		}
 	}
 	BLOCK_PRINTF_END();
-
-	exit(0);
-	//TRANSITION_TO(task_init);
-	TRANSITION_TO(task_print_cyphertext);
+	TRANSITION_TO(task_init);
 }
 
 // TODO: this task also looks like a proxy: is it avoidable?
@@ -376,17 +389,19 @@ void task_mult_mod()
 
 void task_mult()
 {
+	PRIV(carry);
+	PRIV(digit);
 	int i;
 	digit_t a, b, c;
 	digit_t dp, p;
 
-	LOG("mult: digit=%u carry=%x\r\n", GV(digit), GV(carry));
+	LOG("mult: digit=%u carry=%x\r\n", GV(digit_bak), GV(carry_bak));
 
-	p = GV(carry);
+	p = GV(carry_bak);
 	c = 0;
 	for (i = 0; i < NUM_DIGITS; ++i) {
-		if (GV(digit) - i >= 0 && GV(digit) - i < NUM_DIGITS) {
-			a = GV(base, _global_digit-i);
+		if (GV(digit_bak) - i >= 0 && GV(digit_bak) - i < NUM_DIGITS) {
+			a = GV(base, _global_digit_bak-i);
 			b = GV(block, i);
 			dp = a * b;
 
@@ -401,15 +416,19 @@ void task_mult()
 	p &= DIGIT_MASK;
 
 	LOG("mult: c=%x p=%x\r\n", c, p);
-	GV(product, _global_digit) = p;
+	GV(product, _global_digit_bak) = p;
 	GV(print_which) = 0;
-	GV(digit)++;
+	GV(digit_bak)++;
 
-	if (GV(digit) < NUM_DIGITS * 2) {
-		GV(carry) = c;
+	if (GV(digit_bak) < NUM_DIGITS * 2) {
+		GV(carry_bak) = c;
+		COMMIT(carry);
+		COMMIT(digit);
 		TRANSITION_TO(task_mult);
 	} else {
 		GV(next_task_print) = TASK_REF(task_reduce_digits);
+		COMMIT(carry);
+		COMMIT(digit);
 		TRANSITION_TO(task_print_product);
 	}
 }
@@ -479,8 +498,6 @@ void task_reduce_normalizable()
 
 	for (i = GV(reduce); i >= 0; --i) {
 
-		LOG("normalizable: m[%u]=%x n[%u]=%x\r\n", i, GV(product, i), i - GV(offset), GV(modulus, i-_global_offset));
-
 		if (GV(product, i) > GV(modulus, i-_global_offset)) {
 			break;
 		} else if (GV(product, i) < GV(modulus, i-_global_offset)) {
@@ -520,7 +537,8 @@ void task_reduce_normalize()
 
 	borrow = 0;
 	for (i = 0; i < NUM_DIGITS; ++i) {
-		m = GV(product, i + _global_offset);
+		DY_PRIV(product, i + _global_offset);
+		m = GV(product_bak, i + _global_offset);
 		n = GV(modulus, i);
 
 		s = n + borrow;
@@ -535,7 +553,8 @@ void task_reduce_normalize()
 		LOG("normalize: m[%u]=%x n[%u]=%x b=%u d=%x\r\n",
 				i + GV(offset), m, i, n, borrow, d);
 
-		GV(product, i + _global_offset) = d;
+		GV(product_bak, i + _global_offset) = d;
+		DY_COMMIT(product, i + _global_offset);
 	}
 
 	// To call the print task, we need to proxy the values we don't touch
@@ -564,20 +583,23 @@ void task_reduce_n_divisor()
 
 void task_reduce_quotient()
 {
+	PRIV(reduce);
+	PRIV(quotient);
+
 	digit_t m_n, q;
 	uint32_t qn, n_q; // must hold at least 3 digits
 
-	LOG("reduce: quotient: d=%u\r\n", GV(reduce));
+	LOG("reduce: quotient: d=%u\r\n", GV(reduce_bak));
 
 	// NOTE: we asserted that NUM_DIGITS >= 2, so p[d-2] is safe
 
-	LOG("reduce: quotient: m_n=%x m[d]=%x\r\n", GV(modulus, NUM_DIGITS - 1), GV(product, _global_reduce));
+	LOG("reduce: quotient: m_n=%x m[d]=%x\r\n", GV(modulus, NUM_DIGITS - 1), GV(product, _global_reduce_bak));
 
 	// Choose an initial guess for quotient
-	if (GV(product, _global_reduce) == GV(modulus, NUM_DIGITS - 1)) {
-		GV(quotient) = (1 << DIGIT_BITS) - 1;
+	if (GV(product, _global_reduce_bak) == GV(modulus, NUM_DIGITS - 1)) {
+		GV(quotient_bak) = (1 << DIGIT_BITS) - 1;
 	} else {
-		GV(quotient) = ((GV(product, _global_reduce) << DIGIT_BITS) + GV(product, _global_reduce - 1)) / GV(modulus, NUM_DIGITS - 1);
+		GV(quotient_bak) = ((GV(product, _global_reduce_bak) << DIGIT_BITS) + GV(product, _global_reduce_bak - 1)) / GV(modulus, NUM_DIGITS - 1);
 	}
 
 	LOG("reduce: quotient: q0=%x\r\n", q);
@@ -587,29 +609,28 @@ void task_reduce_quotient()
 	// NOTE: An alternative to composing the digits into one variable, is to
 	// have a loop that does the comparison digit by digit to implement the
 	// condition of the while loop below.
-	n_q = ((uint32_t)GV(product, _global_reduce) << (2 * DIGIT_BITS)) + (GV(product, _global_reduce - 1) << DIGIT_BITS) + GV(product, _global_reduce - 2);
+	n_q = ((uint32_t)GV(product, _global_reduce_bak) << (2 * DIGIT_BITS)) + (GV(product, _global_reduce_bak - 1) << DIGIT_BITS) + GV(product, _global_reduce_bak - 2);
 
-	LOG("reduce: quotient: m[d]=%x m[d-1]=%x m[d-2]=%x n_q=%x%x\r\n",
-			GV(product, _global_reduce), GV(product, _global_reduce - 1), GV(product, _global_reduce - 2), (uint16_t)((n_q >> 16) & 0xffff), (uint16_t)(n_q & 0xffff));
+	LOG("reduce: quotient: n_div=%x q0=%x\r\n", GV(n_div), GV(quotient_bak));
 
-	LOG("reduce: quotient: n_div=%x q0=%x\r\n", GV(n_div), GV(quotient));
-
-	GV(quotient)++;
+	GV(quotient_bak)++;
 	do {
-		GV(quotient)--;
-		qn = mult16(GV(n_div), GV(quotient));
-		//qn = GV(n_div) * GV(quotient);
+		GV(quotient_bak)--;
+		//qn = mult16(GV(n_div), GV(quotient_bak));
+		qn = GV(n_div) * GV(quotient_bak);
 		LOG("QN1 = %x\r\n", (uint16_t)((qn >> 16) & 0xffff));
 		LOG("QN0 = %x\r\n", (uint16_t)(qn & 0xffff));
-		LOG("reduce: quotient: q=%x qn=%x%x\r\n", GV(quotient),
+		LOG("reduce: quotient: q=%x qn=%x%x\r\n", GV(quotient_bak),
 				(uint16_t)((qn >> 16) & 0xffff), (uint16_t)(qn & 0xffff));
 	} while (qn > n_q);
 	// This is still not the final quotient, it may be off by one,
 	// which we determine and fix in the 'compare' and 'add' steps.
-	LOG("reduce: quotient: q=%x\r\n", GV(quotient));
+	LOG("reduce: quotient: q=%x\r\n", GV(quotient_bak));
 
-	GV(reduce)--;
+	GV(reduce_bak)--;
 
+	COMMIT(quotient);
+	COMMIT(reduce);
 	TRANSITION_TO(task_reduce_multiply);
 }
 
@@ -719,7 +740,8 @@ void task_reduce_add()
 	// TODO: coult transform this loop into a self-edge
 	c = 0;
 	for (i = offset; i < 2 * NUM_DIGITS; ++i) {
-		m = GV(product, i);
+		DY_PRIV(product, i);
+		m = GV(product_bak, i);
 
 		// Shifted index of the modulus digit
 		j = i - offset;
@@ -732,12 +754,13 @@ void task_reduce_add()
 			// TODO: could break out of the loop in this case (after WRITE)
 		}
 
-		GV(product, i) = c + m + n;
+		GV(product_bak, i) = c + m + n;
+		DY_COMMIT(product, i);
 
-		LOG("reduce: add: m[%u]=%x n[%u]=%x c=%x r=%x\r\n", i, m, j, n, c, GV(product, i));
-
-		c = GV(product, i) >> DIGIT_BITS;
-		GV(product, i) &= DIGIT_MASK;
+		DY_PRIV(product, i);
+		c = GV(product_bak, i) >> DIGIT_BITS;
+		GV(product_bak, i) &= DIGIT_MASK;
+		DY_COMMIT(product, i);
 	}
 	GV(print_which) = 0;
 	GV(next_task_print) = TASK_REF(task_reduce_subtract);
@@ -763,7 +786,8 @@ void task_reduce_subtract()
 	// TODO: could transform this loop into a self-edge
 	borrow = 0;
 	for (i = 0; i < 2 * NUM_DIGITS; ++i) {
-		m = GV(product, i);
+		DY_PRIV(product, i);
+		m = GV(product_bak, i);
 
 		// For calling the print task we need to proxy to it values that we do not modify
 		if (i >= offset) {
@@ -776,10 +800,8 @@ void task_reduce_subtract()
 			} else {
 				borrow = 0;
 			}
-			GV(product, i) = m - s;
-
-			LOG("reduce: subtract: m[%u]=%x qn[%u]=%x b=%u r=%x\r\n",
-					i, m, i, qn, borrow, GV(product, i));
+			GV(product_bak, i) = m - s;
+			DY_COMMIT(product, i);
 
 		}
 	}

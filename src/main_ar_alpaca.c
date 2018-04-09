@@ -1,12 +1,30 @@
 #include <msp430.h>
+#include <param.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include <libwispbase/accel.h>
+//#include <libwispbase/accel.h>
+typedef struct {
+    uint8_t x;
+    uint8_t y;
+    uint8_t z;
+#ifdef __clang__
+    uint8_t padding; // clang crashes with type size mismatch assert failure
+#endif
+} threeAxis_t_8;
 #include <libalpaca/alpaca.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define BLOCK_PRINTF(...)
+#define BLOCK_PRINTF_BEGIN(...)
+#define BLOCK_PRINTF_END(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -23,13 +41,14 @@
 #define NUM_WARMUP_SAMPLES 3
 
 #define ACCEL_WINDOW_SIZE 3
+//#define ACCEL_WINDOW_SIZE 30
 #define MODEL_SIZE 16
 #define SAMPLE_NOISE_FLOOR 10 // TODO: made up value
 
 // Number of classifications to complete in one experiment
-#define SAMPLES_TO_COLLECT 128
+#define SAMPLES_TO_COLLECT 8
+//#define SAMPLES_TO_COLLECT 128
 
-unsigned volatile *timer = &TBCTL;
 typedef threeAxis_t_8 accelReading;
 typedef accelReading accelWindow[ACCEL_WINDOW_SIZE];
 
@@ -43,25 +62,7 @@ typedef enum {
 	CLASS_MOVING,
 } class_t;
 
-
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-	void TimerB1_ISR(void){
-		TBCTL &= ~(0x0002);
-		if(TBCTL && 0x0001){
-			overflow++;
-			TBCTL |= 0x0004;
-			TBCTL |= (0x0002);
-			TBCTL &= ~(0x0001);	
-		}
-	}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
-
 typedef enum {
-	// MODE_IDLE = (BIT(PIN_AUX_1) | BIT(PIN_AUX_2)),
-	//  MODE_TRAIN_STATIONARY = BIT(PIN_AUX_1),
-	//  MODE_TRAIN_MOVING = BIT(PIN_AUX_2),
 	MODE_IDLE = 3,
 	MODE_TRAIN_STATIONARY = 2,
 	MODE_TRAIN_MOVING = 1,
@@ -80,6 +81,27 @@ TASK(9, task_warmup)
 TASK(10, task_train)
 TASK(11, task_idle)
 
+/* This is originally done by the compiler */
+__nv uint8_t* data_src[3];
+__nv uint8_t* data_dest[3];
+__nv unsigned data_size[3];
+GLOBAL_SB(unsigned, seed_bak);
+GLOBAL_SB(uint16_t, pinState_bak);
+GLOBAL_SB(unsigned, count_bak);
+GLOBAL_SB(unsigned, discardedSamplesCount_bak);
+GLOBAL_SB(unsigned, samplesInWindow_bak);
+GLOBAL_SB(unsigned, movingCount_bak);
+GLOBAL_SB(unsigned, stationaryCount_bak);
+GLOBAL_SB(unsigned, totalCount_bak);
+GLOBAL_SB(accelReading, window_bak, ACCEL_WINDOW_SIZE);
+GLOBAL_SB(unsigned, window_isDirty, ACCEL_WINDOW_SIZE);
+GLOBAL_SB(unsigned, trainingSetSize_bak);
+void clear_isDirty() {
+	PRINTF("clear\r\n");
+	memset(&GV(window_isDirty, 0), 0, sizeof(_global_window_isDirty));
+}
+/* end */
+
 GLOBAL_SB(uint16_t, pinState);
 GLOBAL_SB(unsigned, discardedSamplesCount);
 GLOBAL_SB(run_mode_t, class);
@@ -97,10 +119,10 @@ GLOBAL_SB(unsigned, seed);
 GLOBAL_SB(unsigned, count);
 
 void ACCEL_singleSample_(threeAxis_t_8* result){
-	result->x = (GV(seed)*17)%85;
-	result->y = (GV(seed)*17*17)%85;
-	result->z = (GV(seed)*17*17*17)%85;
-	++GV(seed);
+	result->x = (GV(seed_bak)*17)%85;
+	result->y = (GV(seed_bak)*17*17)%85;
+	result->z = (GV(seed_bak)*17*17*17)%85;
+	++GV(seed_bak);
 }
 
 static void init_hw()
@@ -112,17 +134,6 @@ static void init_hw()
 
 void initializeHardware()
 {
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-#endif
-//	*timer &= ~(0x0020); //set bit 5 to zero(halt!)
-	threeAxis_t_8 accelID = {0};
-
 	init_hw();
 
 #ifdef CONFIG_EDB
@@ -135,56 +146,87 @@ void initializeHardware()
 
 	LOG("init: initializing accel\r\n");
 
-	LOG("init: accel hw id: 0x%x\r\n", accelID.x);
-
 	PRINTF(".%u.\r\n", curctx->task->idx);
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+	// Output enabled
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+	//
+	// Out high
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	// Out low
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
 }
 
 void task_init()
 {
+	PRINTF("start\r\n");
 	LOG("init\r\n");
-
+#ifdef LOGIC
+	// Out high
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	// Out low
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+#endif
 	GV(pinState) = MODE_IDLE;
 
 	GV(count) = 0;
 	GV(seed) = 1;
 	TRANSITION_TO(task_selectMode);
+
 }
+
 void task_selectMode()
 {
+	PRIV(count);
+	PRIV(pinState);
+
 	uint16_t pin_state=1;
-	++GV(count);
-	LOG("count: %u\r\n",count);
-	if(GV(count) >= 3) pin_state=2;
-	if(GV(count)>=5) pin_state=0;
-	if (GV(count) >= 7) {
-		PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-		while(1);
-		//TRANSITION_TO(task_init);
+	++GV(count_bak);
+	LOG("count: %u\r\n", GV(count_bak));
+	//	if(GV(count_bak) >= 3) pin_state=2;
+	//	if(GV(count_bak)>=5) pin_state=0;
+	//	if (GV(count_bak) >= 7) {
+	if(GV(count_bak) >= 2) pin_state=2;
+	if(GV(count_bak)>=3) pin_state=0;
+	if (GV(count_bak) >= 4) {
+		//PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
+		//while(1);
+		PRINTF("done\r\n");
+
+		COMMIT(count);
+		COMMIT(pinState);
+		TRANSITION_TO(task_init);
 	}
 	run_mode_t mode;
 	class_t class;
 
-	// uint16_t pin_state = GPIO(PORT_AUX, IN) & (BIT(PIN_AUX_1) | BIT(PIN_AUX_2));
-
 	// Don't re-launch training after finishing training
 	if ((pin_state == MODE_TRAIN_STATIONARY ||
 				pin_state == MODE_TRAIN_MOVING) &&
-			pin_state == GV(pinState)) {
+			pin_state == GV(pinState_bak)) {
 		pin_state = MODE_IDLE;
 	} else {
-		GV(pinState) = pin_state;
+		GV(pinState_bak) = pin_state;
 	}
 
 	LOG("selectMode: 0x%x\r\n", pin_state);
 
 	switch(pin_state) {
-		case MODE_TRAIN_STATIONARY:		
+		case MODE_TRAIN_STATIONARY:
 			GV(discardedSamplesCount) = 0;
 			GV(mode) = MODE_TRAIN_STATIONARY;
 			GV(class) = CLASS_STATIONARY;
 			GV(samplesInWindow) = 0;
 
+			COMMIT(count);
+			COMMIT(pinState);
 			TRANSITION_TO(task_warmup);
 			break;
 
@@ -194,16 +236,22 @@ void task_selectMode()
 			GV(class) = CLASS_MOVING;
 			GV(samplesInWindow) = 0;
 
+			COMMIT(count);
+			COMMIT(pinState);
 			TRANSITION_TO(task_warmup);
 			break;
 
 		case MODE_RECOGNIZE:
 			GV(mode) = MODE_RECOGNIZE;
 
+			COMMIT(count);
+			COMMIT(pinState);
 			TRANSITION_TO(task_resetStats);
 			break;
 
 		default:
+			COMMIT(count);
+			COMMIT(pinState);
 			TRANSITION_TO(task_idle);
 	}
 }
@@ -211,7 +259,6 @@ void task_selectMode()
 void task_resetStats()
 {
 	// NOTE: could roll this into selectMode task, but no compelling reason
-
 	LOG("resetStats\r\n");
 
 	// NOTE: not combined into one struct because not all code paths use both
@@ -226,20 +273,26 @@ void task_resetStats()
 
 void task_sample()
 {
+	PRIV(samplesInWindow);
+	PRIV(seed);
 	LOG("sample\r\n");
 
 	accelReading sample;
 	ACCEL_singleSample_(&sample);
-	GV(window, _global_samplesInWindow) = sample;
-	++GV(samplesInWindow);
+	GV(window, _global_samplesInWindow_bak) = sample;
+	++GV(samplesInWindow_bak);
 	LOG("sample: sample %u %u %u window %u\r\n",
-			sample.x, sample.y, sample.z, GV(samplesInWindow));
+			sample.x, sample.y, sample.z, GV(samplesInWindow_bak));
 
 
-	if (GV(samplesInWindow) < ACCEL_WINDOW_SIZE) {
+	if (GV(samplesInWindow_bak) < ACCEL_WINDOW_SIZE) {
+		COMMIT(samplesInWindow);
+		COMMIT(seed);
 		TRANSITION_TO(task_sample);
 	} else {
-		GV(samplesInWindow) = 0;
+		GV(samplesInWindow_bak) = 0;
+		COMMIT(samplesInWindow);
+		COMMIT(seed);
 		TRANSITION_TO(task_transform);
 	}
 }
@@ -253,16 +306,107 @@ void task_transform()
 	accelReading transformedSample;
 
 	for (i = 0; i < ACCEL_WINDOW_SIZE; i++) {
-		if (GV(window, i).x < SAMPLE_NOISE_FLOOR ||
-				GV(window, i).y < SAMPLE_NOISE_FLOOR ||
-				GV(window, i).z < SAMPLE_NOISE_FLOOR) {
+		// To mimic stupid comiler behavior,
+		// we write a less optimal code..
+		DY_PRIV(window, i);
+		if (GV(window_bak, i).x < SAMPLE_NOISE_FLOOR) {
+			DY_PRIV(window, i);
+			if (GV(window_bak, i).x > SAMPLE_NOISE_FLOOR) {
+				DY_PRIV(window, i);
+				GV(window_bak, i).x = GV(window_bak, i).x;
+			}
+			else {
+				GV(window_bak, i).x = 0;
+			}
+			DY_COMMIT(window, i);
 
-			GV(window, i).x = (GV(window, i).x > SAMPLE_NOISE_FLOOR)
-				? GV(window, i).x : 0;
-			GV(window, i).y = (GV(window, i).y > SAMPLE_NOISE_FLOOR)
-				? GV(window, i).y : 0;
-			GV(window, i).z = (GV(window, i).z > SAMPLE_NOISE_FLOOR)
-				? GV(window, i).z : 0;
+			DY_PRIV(window, i);
+			if (GV(window_bak, i).y > SAMPLE_NOISE_FLOOR) {
+				DY_PRIV(window, i);
+				GV(window_bak, i).y = GV(window_bak, i).y;
+			}
+			else {
+				GV(window_bak, i).y = 0;
+			}
+			DY_COMMIT(window, i);
+
+			DY_PRIV(window, i);
+			if (GV(window_bak, i).z > SAMPLE_NOISE_FLOOR) {
+				DY_PRIV(window, i);
+				GV(window_bak, i).z = GV(window_bak, i).z;
+			}
+			else {
+				GV(window_bak, i).z = 0;
+			}
+			DY_COMMIT(window, i);
+		}
+		else {
+			DY_PRIV(window, i);
+			if (GV(window_bak, i).y < SAMPLE_NOISE_FLOOR) {
+				DY_PRIV(window, i);
+				if (GV(window_bak, i).x > SAMPLE_NOISE_FLOOR) {
+					DY_PRIV(window, i);
+					GV(window_bak, i).x = GV(window_bak, i).x;
+				}
+				else {
+					GV(window_bak, i).x = 0;
+				}
+				DY_COMMIT(window, i);
+
+				DY_PRIV(window, i);
+				if (GV(window_bak, i).y > SAMPLE_NOISE_FLOOR) {
+					DY_PRIV(window, i);
+					GV(window_bak, i).y = GV(window_bak, i).y;
+				}
+				else {
+					GV(window_bak, i).y = 0;
+				}
+				DY_COMMIT(window, i);
+
+				DY_PRIV(window, i);
+				if (GV(window_bak, i).z > SAMPLE_NOISE_FLOOR) {
+					DY_PRIV(window, i);
+					GV(window_bak, i).z = GV(window_bak, i).z;
+				}
+				else {
+					GV(window_bak, i).z = 0;
+				}
+				DY_COMMIT(window, i);
+			}
+			else {
+				DY_PRIV(window, i);
+				if (GV(window_bak, i).z < SAMPLE_NOISE_FLOOR) {
+					DY_PRIV(window, i);
+					if (GV(window_bak, i).x > SAMPLE_NOISE_FLOOR) {
+						DY_PRIV(window, i);
+						GV(window_bak, i).x = GV(window_bak, i).x;
+					}
+					else {
+						GV(window_bak, i).x = 0;
+					}
+					DY_COMMIT(window, i);
+
+					DY_PRIV(window, i);
+					if (GV(window_bak, i).y > SAMPLE_NOISE_FLOOR) {
+						DY_PRIV(window, i);
+						GV(window_bak, i).y = GV(window_bak, i).y;
+					}
+					else {
+						GV(window_bak, i).y = 0;
+					}
+					DY_COMMIT(window, i);
+
+					DY_PRIV(window, i);
+					if (GV(window_bak, i).z > SAMPLE_NOISE_FLOOR) {
+						DY_PRIV(window, i);
+						GV(window_bak, i).z = GV(window_bak, i).z;
+					}
+					else {
+						GV(window_bak, i).z = 0;
+					}
+					DY_COMMIT(window, i);
+				}
+			}
 		}
 	}
 	TRANSITION_TO(task_featurize);
@@ -303,6 +447,7 @@ void task_featurize()
 
 	unsigned meanmag = mean.x*mean.x + mean.y*mean.y + mean.z*mean.z;
 	unsigned stddevmag = stddev.x*stddev.x + stddev.y*stddev.y + stddev.z*stddev.z;
+	LOG("sqrt start\r\n");
 	features.meanmag   = sqrt16(meanmag);
 	features.stddevmag = sqrt16(stddevmag);
 	LOG("featurize: features: mean %u stddev %u\r\n",
@@ -383,83 +528,101 @@ void task_classify() {
 
 void task_stats()
 {
+	PRIV(totalCount);
+	PRIV(movingCount);
+	PRIV(stationaryCount);
+
 	unsigned movingCount = 0, stationaryCount = 0;
 
 	LOG("stats\r\n");
 
-	++GV(totalCount);
-	LOG("stats: total %u\r\n", GV(totalCount));
+	++GV(totalCount_bak);
+	LOG("stats: total %u\r\n", GV(totalCount_bak));
 
 	switch (GV(class)) {
 		case CLASS_MOVING:
 
-			++GV(movingCount);
-			LOG("stats: moving %u\r\n", GV(movingCount));
+			++GV(movingCount_bak);
+			LOG("stats: moving %u\r\n", GV(movingCount_bak));
 			break;
 		case CLASS_STATIONARY:
 
-			++GV(stationaryCount);
-			LOG("stats: stationary %u\r\n", GV(stationaryCount));
+			++GV(stationaryCount_bak);
+			LOG("stats: stationary %u\r\n", GV(stationaryCount_bak));
 			break;
 	}
 
-	if (GV(totalCount) == SAMPLES_TO_COLLECT) {
+	if (GV(totalCount_bak) == SAMPLES_TO_COLLECT) {
 
-		unsigned resultStationaryPct = GV(stationaryCount) * 100 / GV(totalCount);
-		unsigned resultMovingPct = GV(movingCount) * 100 / GV(totalCount);
+		unsigned resultStationaryPct = GV(stationaryCount_bak) * 100 / GV(totalCount_bak);
+		unsigned resultMovingPct = GV(movingCount_bak) * 100 / GV(totalCount_bak);
 
-		unsigned sum = GV(stationaryCount) + GV(movingCount);
+		unsigned sum = GV(stationaryCount_bak) + GV(movingCount_bak);
 		PRINTF("stats: s %u (%u%%) m %u (%u%%) sum/tot %u/%u: %c\r\n",
-		       GV(stationaryCount), resultStationaryPct,
-		       GV(movingCount), resultMovingPct,
-		       GV(totalCount), sum, sum == GV(totalCount) ? 'V' : 'X');
+				GV(stationaryCount_bak), resultStationaryPct,
+				GV(movingCount_bak), resultMovingPct,
+				GV(totalCount_bak), sum, sum == GV(totalCount_bak) ? 'V' : 'X');
+		COMMIT(totalCount);
+		COMMIT(stationaryCount);
+		COMMIT(movingCount);
 		TRANSITION_TO(task_idle);
 	} else {
+		COMMIT(totalCount);
+		COMMIT(stationaryCount);
+		COMMIT(movingCount);
 		TRANSITION_TO(task_sample);
 	}
 }
 
 void task_warmup()
 {
+	PRIV(discardedSamplesCount);
+	PRIV(seed);
+
 	threeAxis_t_8 sample;
 	LOG("warmup\r\n");
 
-	if (GV(discardedSamplesCount) < NUM_WARMUP_SAMPLES) {
+	if (GV(discardedSamplesCount_bak) < NUM_WARMUP_SAMPLES) {
 
 		ACCEL_singleSample_(&sample);
-		++GV(discardedSamplesCount);
-		LOG("warmup: discarded %u\r\n", GV(discardedSamplesCount));
+		++GV(discardedSamplesCount_bak);
+		COMMIT(seed);
+		COMMIT(discardedSamplesCount);
 		TRANSITION_TO(task_warmup);
 	} else {
 		GV(trainingSetSize) = 0;
+		COMMIT(seed);
+		COMMIT(discardedSamplesCount);
 		TRANSITION_TO(task_sample);
 	}
 }
 
 void task_train()
 {
+	PRIV(trainingSetSize);
+
 	LOG("train\r\n");
-	unsigned trainingSetSize;;
+	unsigned trainingSetSize;
 	unsigned class;
 
 	switch (GV(class)) {
 		case CLASS_STATIONARY:
-			GV(model_stationary, _global_trainingSetSize) = GV(features);
+			GV(model_stationary, _global_trainingSetSize_bak) = GV(features);
 			break;
 		case CLASS_MOVING:
-			GV(model_moving, _global_trainingSetSize) = GV(features);
+			GV(model_moving, _global_trainingSetSize_bak) = GV(features);
 			break;
 	}
 
-	++GV(trainingSetSize);
+	++GV(trainingSetSize_bak);
 	LOG("train: class %u count %u/%u\r\n", GV(class),
-			GV(trainingSetSize), MODEL_SIZE);
+			GV(trainingSetSize_bak), MODEL_SIZE);
 
-	if (GV(trainingSetSize) < MODEL_SIZE) {
+	if (GV(trainingSetSize_bak) < MODEL_SIZE) {
+		COMMIT(trainingSetSize);
 		TRANSITION_TO(task_sample);
 	} else {
-		//        PRINTF("train: class %u done (mn %u sd %u)\r\n",
-		//               class, features.meanmag, features.stddevmag);
+		COMMIT(trainingSetSize);
 		TRANSITION_TO(task_idle);
 	}
 }
@@ -470,5 +633,5 @@ void task_idle() {
 	TRANSITION_TO(task_selectMode);
 }
 
-INIT_FUNC(initializeHardware)
+	INIT_FUNC(initializeHardware)
 ENTRY_TASK(task_init)

@@ -616,8 +616,7 @@ void task_reduce_quotient()
 	GV(quotient_bak)++;
 	do {
 		GV(quotient_bak)--;
-		//qn = mult16(GV(n_div), GV(quotient_bak));
-		qn = GV(n_div) * GV(quotient_bak);
+		qn = mult16(GV(n_div), GV(quotient_bak));
 		LOG("QN1 = %x\r\n", (uint16_t)((qn >> 16) & 0xffff));
 		LOG("QN0 = %x\r\n", (uint16_t)(qn & 0xffff));
 		LOG("reduce: quotient: q=%x qn=%x%x\r\n", GV(quotient_bak),

@@ -7,7 +7,16 @@
 //#include <wisp-base.h>
 #include <libalpaca/alpaca.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define BLOCK_PRINTF(...)
+#define BLOCK_PRINTF_BEGIN(...)
+#define BLOCK_PRINTF_END(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -18,6 +27,7 @@
 #include <libedb/edb.h>
 #endif
 
+#include "param.h"
 #include "pins.h"
 
 #define LENGTH 13
@@ -303,28 +313,12 @@ static __ro_nv const uint32_t init_s3[256] = {
 	0xb74e6132L, 0xce77e25bL, 0x578fdfe3L, 0x3ac372e6L, 
 };
 
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-	void TimerB1_ISR(void){
-		TBCTL &= ~(0x0002);
-		if(TBCTL && 0x0001){
-			overflow++;
-			TBCTL |= 0x0004;
-			TBCTL |= (0x0002);
-			TBCTL &= ~(0x0001);	
-		}
-	}
-
-
 // Have to define the vector table elements manually, because clang,
 // unlike gcc, does not generate sections for the vectors, it only
 // generates symbols (aliases). The linker script shipped in the
 // TI GCC distribution operates on sections, so we define a symbol and put it
 // in its own section here named as the linker script wants it.
 // The 2 bytes per alias symbol defined by clang are wasted.
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
-
 	TASK(1,  task_init)
 	TASK(2,  task_set_ukey)
 	TASK(3,  task_done)
@@ -333,24 +327,44 @@ void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 	TASK(6,  task_set_key)
 	TASK(7,  task_set_key2)
 	TASK(8,  task_encrypt)
-	TASK(8,  task_start_encrypt)
-	TASK(9,  task_start_encrypt2)
-TASK(10,  task_start_encrypt3)
+	TASK(9,  task_start_encrypt)
+	TASK(10,  task_start_encrypt2)
+TASK(11,  task_start_encrypt3)
 
-	GLOBAL_SB(uint8_t*, return_to);	
-	GLOBAL_SB(char, result, LENGTH);
-	GLOBAL_SB(unsigned char, ukey, 16);
-	GLOBAL_SB(uint32_t, s0, 256);
-	GLOBAL_SB(uint32_t, s1, 256);
-	GLOBAL_SB(uint32_t, s2, 256);
-	GLOBAL_SB(uint32_t, s3, 256);
-	GLOBAL_SB(unsigned, index);
-	GLOBAL_SB(uint32_t, index2);
-	GLOBAL_SB(unsigned, n);
-	GLOBAL_SB(task_t*, next_task);
-	GLOBAL_SB(uint32_t, input, 2);
-	GLOBAL_SB(unsigned char, iv, 8);
-	GLOBAL_SB(uint32_t, key, 18);
+/* This is originally done by the compiler */
+__nv uint8_t* data_src[18];
+__nv uint8_t* data_dest[18];
+__nv unsigned data_size[18];
+GLOBAL_SB(unsigned, n_bak);
+GLOBAL_SB(unsigned, index_bak);
+GLOBAL_SB(uint32_t, index2_bak);
+GLOBAL_SB(unsigned char, iv_bak, 8);
+GLOBAL_SB(unsigned, iv_isDirty, 8);
+GLOBAL_SB(uint32_t, key_bak, 18);
+GLOBAL_SB(unsigned, key_isDirty, 18);
+GLOBAL_SB(uint32_t, input_bak, 2);
+GLOBAL_SB(unsigned, input_isDirty, 2);
+void clear_isDirty() {
+	PRINTF("clear\r\n");
+	memset(&GV(iv_isDirty, 0), 0, sizeof(_global_iv_isDirty));
+	memset(&GV(key_isDirty, 0), 0, sizeof(_global_key_isDirty));
+	memset(&GV(input_isDirty, 0), 0, sizeof(_global_input_isDirty));
+}
+/* end */
+
+GLOBAL_SB(char, result, LENGTH);
+GLOBAL_SB(unsigned char, ukey, 16);
+GLOBAL_SB(uint32_t, s0, 256);
+GLOBAL_SB(uint32_t, s1, 256);
+GLOBAL_SB(uint32_t, s2, 256);
+GLOBAL_SB(uint32_t, s3, 256);
+GLOBAL_SB(unsigned, index);
+GLOBAL_SB(uint32_t, index2);
+GLOBAL_SB(unsigned, n);
+GLOBAL_SB(task_t*, next_task);
+GLOBAL_SB(uint32_t, input, 2);
+GLOBAL_SB(unsigned char, iv, 8);
+GLOBAL_SB(uint32_t, key, 18);
 
 #if VERBOSE > 0
 	void print_long(uint32_t l) {
@@ -360,6 +374,13 @@ TASK(10,  task_start_encrypt3)
 #endif
 void task_init()
 {
+#ifdef LOGIC
+	// Out high
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	// Out low
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+#endif
+	PRINTF("start\r\n");
 	GV(n) = 0;
 	GV(index) = 0;
 	GV(index2) = 0;
@@ -368,7 +389,9 @@ void task_init()
 		GV(iv, i) = 0;
 	}
 	TRANSITION_TO(task_set_ukey);
+
 }
+
 void task_set_ukey() {
 	unsigned i = 0;
 	unsigned by = 0;
@@ -387,6 +410,7 @@ void task_set_ukey() {
 	}
 	TRANSITION_TO(task_init_key);
 }
+
 void task_init_key() {
 	unsigned i;
 	for (i = 0; i < 18; ++i) {
@@ -394,39 +418,32 @@ void task_init_key() {
 	}
 	TRANSITION_TO(task_init_s);
 }
+
 void task_init_s() {
+	PRIV(index);
 	unsigned i;
 
 	for (i = 0; i < 256; ++i) {
-		if (GV(index) == 0) 
+		if (GV(index_bak) == 0)
 			GV(s0, i) = init_s0[i];
-		else if (GV(index) == 1)
+		else if (GV(index_bak) == 1)
 			GV(s1, i) = init_s1[i];
-		else if (GV(index) == 2)
+		else if (GV(index_bak) == 2)
 			GV(s2, i) = init_s2[i];
-		else if (GV(index) == 3)
+		else if (GV(index_bak) == 3)
 			GV(s3, i) = init_s3[i];
 	}
-	if(GV(index) == 3){
+	if(GV(index_bak) == 3){
+		COMMIT(index);
 		TRANSITION_TO(task_set_key);
 	}
 	else {
-		++GV(index);
+		++GV(index_bak);
+		COMMIT(index);
 		TRANSITION_TO(task_init_s);
 	}
-	/*
-	   for (i = 0; i < 1024; ++i) {
-	   if (i < 256) 
-	   GV(s0, i) = init_s0[i];
-	   else if (i < 256*2)
-	   GV(s1, i-256) = init_s1[i-256];
-	   else if (i < 256*3)
-	   GV(s2, i-256*2) = init_s2[i-256*2];
-	   else 
-	   GV(s3, i-256*3) = init_s3[i-256*3];
-	   }
-	   TRANSITION_TO(task_set_key);*/
 }
+
 void task_set_key() {
 	unsigned i;
 	uint32_t ri, ri2;
@@ -451,101 +468,113 @@ void task_set_key() {
 		ri |= ri2;
 		d = (d >= 8)? 0 : d;
 
-		GV(key, i) ^= ri;
+		DY_PRIV(key, i);
+		GV(key_bak, i) ^= ri;
+		DY_COMMIT(key, i);
 	}
-	TRANSITION_TO(task_set_key2);	
+	TRANSITION_TO(task_set_key2);
 }
+
 void task_set_key2() {
-	if (GV(index2) == 0) {
+	PRIV(index2);
+
+	if (GV(index2_bak) == 0) {
 		GV(input, 0) = 0;
 		GV(input, 1) = 0;
-		GV(index2) += 2;
+		GV(index2_bak) += 2;
 		GV(next_task) = TASK_REF(task_set_key2);
 
+		COMMIT(index2);
 		TRANSITION_TO(task_encrypt);
 	}
 	else {
-		if (GV(index2) < 20) { //set key
-			GV(key, _global_index2-2) = GV(input, 0);
-			GV(key, _global_index2-1) = GV(input, 1);
+		if (GV(index2_bak) < 20) { //set key
+			GV(key, _global_index2_bak-2) = GV(input, 0);
+			GV(key, _global_index2_bak-1) = GV(input, 1);
 #if VERBOSE > 0
-			LOG("key[%u]=",_global_index2-2);
+			LOG("key[%u]=",_global_index2_bak-2);
 			print_long(GV(input, 0));
-			LOG("key[%u]=",_global_index2-1);
+			LOG("key[%u]=",_global_index2_bak-1);
 			print_long(GV(input, 1));	
 #endif
-			GV(index2) += 2;
+			GV(index2_bak) += 2;
+			COMMIT(index2);
 			TRANSITION_TO(task_encrypt);
 		}
 		else { //set s
-			if (GV(index2) < (256 + 20)) { //set s0 
-				GV(s0, _global_index2-20) = GV(input, 0);
-				GV(s0, _global_index2-19) = GV(input, 1);
+			if (GV(index2_bak) < (256 + 20)) { //set s0 
+				GV(s0, _global_index2_bak-20) = GV(input, 0);
+				GV(s0, _global_index2_bak-19) = GV(input, 1);
 #if VERBOSE > 0
-				if (GV(index2) == 20 || GV(index2) == 254 + 20) {
-					LOG("s0[%u]=",GV(index2)-20);
+				if (GV(index2_bak) == 20 || GV(index2_bak) == 254 + 20) {
+					LOG("s0[%u]=",GV(index2_bak)-20);
 					print_long(GV(input, 0));
 					//print_long(k0);
-					LOG("s0[%u]=",GV(index2)-19);
+					LOG("s0[%u]=",GV(index2_bak)-19);
 					print_long(GV(input, 1));
 					//print_long(k1);	
 				}
 #endif
-				GV(index2) += 2;
+				GV(index2_bak) += 2;
+				COMMIT(index2);
 				TRANSITION_TO(task_encrypt);
 			}
-			else if (GV(index2) < (512 + 20)) { //set s1
-				GV(s1, _global_index2-(256+20)) = GV(input, 0);
-				GV(s1, _global_index2-(256+19)) = GV(input, 1);
+			else if (GV(index2_bak) < (512 + 20)) { //set s1
+				GV(s1, _global_index2_bak-(256+20)) = GV(input, 0);
+				GV(s1, _global_index2_bak-(256+19)) = GV(input, 1);
 #if VERBOSE > 0
-				if (GV(index2) == 256 + 20 || GV(index2) == (256*2-2) + 20) {
-					LOG("s1[%u]=",GV(index2)-(256+20));
+				if (GV(index2_bak) == 256 + 20 || GV(index2_bak) == (256*2-2) + 20) {
+					LOG("s1[%u]=",GV(index2_bak)-(256+20));
 					print_long(GV(input, 0));
 					//print_long(k0);
-					LOG("s1[%u]=",GV(index2)-(256+19));
+					LOG("s1[%u]=",GV(index2_bak)-(256+19));
 					print_long(GV(input, 1));
 					//print_long(k1);	
 				}
 #endif
-				GV(index2) += 2;
+				GV(index2_bak) += 2;
+				COMMIT(index2);
 				TRANSITION_TO(task_encrypt);
 			}
-			else if (GV(index2) < (256*3 + 20)) { //set s2
-				GV(s2, _global_index2-(256*2+20)) = GV(input, 0);
-				GV(s2, _global_index2-(256*2+19)) = GV(input, 1);
+			else if (GV(index2_bak) < (256*3 + 20)) { //set s2
+				GV(s2, _global_index2_bak-(256*2+20)) = GV(input, 0);
+				GV(s2, _global_index2_bak-(256*2+19)) = GV(input, 1);
 #if VERBOSE > 0
-				if (GV(index2) == 256*2 + 20 || GV(index2) == (256*3-2) + 20) {
-					LOG("s2[%u]=",GV(index2)-(256*2+20));
+				if (GV(index2_bak) == 256*2 + 20 || GV(index2_bak) == (256*3-2) + 20) {
+					LOG("s2[%u]=",GV(index2_bak)-(256*2+20));
 					print_long(GV(input, 0));
 					//print_long(k0);
-					LOG("s2[%u]=",GV(index2)-(256*2+19));
+					LOG("s2[%u]=",GV(index2_bak)-(256*2+19));
 					print_long(GV(input, 1));
-					//print_long(k1);	
+					//print_long(k1);
 				}
 #endif
-				GV(index2) += 2;
+				GV(index2_bak) += 2;
+				COMMIT(index2);
 				TRANSITION_TO(task_encrypt);
 			}
-			else if (GV(index2) < (256*4 + 20)) {
-				GV(s3, _global_index2-(256*3+20)) = GV(input, 0);
-				GV(s3, _global_index2-(256*3+19)) = GV(input, 1);
+			else if (GV(index2_bak) < (256*4 + 20)) {
+				GV(s3, _global_index2_bak-(256*3+20)) = GV(input, 0);
+				GV(s3, _global_index2_bak-(256*3+19)) = GV(input, 1);
 #if VERBOSE > 0
-				if (GV(index2) == 256*3 + 20 || GV(index2) == (256*4-2) + 20) {
-					LOG("s3[%u]=",GV(index2)-(256*3+20));
+				if (GV(index2_bak) == 256*3 + 20 || GV(index2_bak) == (256*4-2) + 20) {
+					LOG("s3[%u]=",GV(index2_bak)-(256*3+20));
 					print_long(GV(input, 0));
 					//print_long(k0);
-					LOG("s3[%u]=",GV(index2)-(256*3+19));
+					LOG("s3[%u]=",GV(index2_bak)-(256*3+19));
 					print_long(GV(input, 1));
-					//print_long(k1);	
+					//print_long(k1);
 				}
 #endif
-				GV(index2) += 2;
-				if (GV(index2) < (256*4 + 20)) {
+				GV(index2_bak) += 2;
+				if (GV(index2_bak) < (256*4 + 20)) {
+					COMMIT(index2);
 					TRANSITION_TO(task_encrypt);
 				}
 				else { //done
-					GV(index2) = 0;
-					TRANSITION_TO(task_start_encrypt);	
+					GV(index2_bak) = 0;
+					COMMIT(index2);
+					TRANSITION_TO(task_start_encrypt);
 				}
 			}
 		}
@@ -554,12 +583,11 @@ void task_set_key2() {
 
 void task_encrypt() {
 	uint32_t p, l, r, s0, s1, s2, s3, tmp;
-	//	unsigned index = *READ(GV(index));
-	//	uint8_t* return_to;
-	//	struct GV_POINTER(key)* return_to;
 	unsigned index;
-	r = GV(input, 0);
-	l = GV(input, 1);
+	DY_PRIV(input, 0);
+	r = GV(input_bak, 0);
+	DY_PRIV(input, 1);
+	l = GV(input_bak, 1);
 	for (index = 0; index < 17; ++index) {
 		p = GV(key, index);
 #if VERBOSE > 0
@@ -612,23 +640,41 @@ void task_encrypt() {
 	}
 	p = GV(key, 17);
 	l ^= p;
-	GV(input, 1) = r;
-	GV(input, 0) = l;
+	GV(input_bak, 1) = r;
+	DY_COMMIT(input, 1);
+	GV(input_bak, 0) = l;
+	DY_COMMIT(input, 0);
 	transition_to(GV(next_task));
 }
 
 void task_start_encrypt() {
-	unsigned i; 
-	//	n = *READ(GV(n));
+	unsigned i;
 	if (GV(n) == 0) {
-		GV(input, 0) =((unsigned long)(GV(iv, 0)))<<24L;
-		GV(input, 0)|=((unsigned long)(GV(iv, 1)))<<16L;
-		GV(input, 0)|=((unsigned long)(GV(iv, 2)))<< 8L;
-		GV(input, 0)|=((unsigned long)(GV(iv, 3)));
-		GV(input, 1) =((unsigned long)(GV(iv, 4)))<<24L;
-		GV(input, 1)|=((unsigned long)(GV(iv, 5)))<<16L;
-		GV(input, 1)|=((unsigned long)(GV(iv, 6)))<< 8L;
-		GV(input, 1)|=((unsigned long)(GV(iv, 7)));
+		GV(input_bak, 0) =((unsigned long)(GV(iv, 0)))<<24L;
+		DY_COMMIT(input, 0);
+		DY_PRIV(input, 0);
+		GV(input_bak, 0)|=((unsigned long)(GV(iv, 1)))<<16L;
+		DY_COMMIT(input, 0);
+		DY_PRIV(input, 0);
+		GV(input_bak, 0)|=((unsigned long)(GV(iv, 2)))<< 8L;
+		DY_COMMIT(input, 0);
+		DY_PRIV(input, 0);
+		GV(input_bak, 0)|=((unsigned long)(GV(iv, 3)));
+		DY_COMMIT(input, 0);
+
+		GV(input_bak, 1) =((unsigned long)(GV(iv, 4)))<<24L;
+		DY_COMMIT(input, 1);
+		DY_PRIV(input, 1);
+		GV(input_bak, 1)|=((unsigned long)(GV(iv, 5)))<<16L;
+		DY_COMMIT(input, 1);
+		DY_PRIV(input, 1);
+		GV(input_bak, 1)|=((unsigned long)(GV(iv, 6)))<< 8L;
+		DY_COMMIT(input, 1);
+		DY_PRIV(input, 1);
+		GV(input_bak, 1)|=((unsigned long)(GV(iv, 7)));
+		DY_COMMIT(input, 1);
+		DY_PRIV(input, 1);
+
 		GV(next_task) = TASK_REF(task_start_encrypt2);
 		TRANSITION_TO(task_encrypt);
 	}
@@ -654,27 +700,36 @@ void task_start_encrypt2() {
 }
 
 void task_start_encrypt3() {
+	PRIV(index2);
+	PRIV(n);
+
 	unsigned char c;
-	c = indata[GV(index2)]^(GV(iv, _global_n));
-	GV(result, _global_index2) = c;
+	DY_PRIV(iv, _global_n_bak);
+	c = indata[GV(index2_bak)]^(GV(iv_bak, _global_n_bak));
+
+	GV(result, _global_index2_bak) = c;
 	PRINTF("result: %x\r\n", c);
-	GV(iv, _global_n) = c;
-	GV(n) = (GV(n)+1)&0x07;
-	++GV(index2);
-	if (GV(index2) == LENGTH) {
-		TRANSITION_TO(task_done);	
+	GV(iv, _global_n_bak) = c;
+	DY_COMMIT(iv, _global_n_bak);
+
+	GV(n_bak) = (GV(n_bak)+1)&0x07;
+	++GV(index2_bak);
+	if (GV(index2_bak) == LENGTH) {
+		COMMIT(index2);
+		COMMIT(n);
+		TRANSITION_TO(task_done);
 	}
 	else {
-		TRANSITION_TO(task_start_encrypt);	
+		COMMIT(index2);
+		COMMIT(n);
+		TRANSITION_TO(task_start_encrypt);
 	}
 }
 
 void task_done()
 {
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-	exit(0);
-
-	//    TRANSITION_TO(task_init);
+	PRINTF("end\r\n");
+	TRANSITION_TO(task_init);
 }
 static void init_hw()
 {
@@ -683,16 +738,19 @@ static void init_hw()
 	msp_clock_setup();
 }
 
+__attribute__((interrupt(51)))
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		BITSET(TBCTL, TBCLR);
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
+
 void init()
 {
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-#endif
+	BITSET(TBCTL, (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 40;
 	init_hw();
 
 #ifdef CONFIG_EDB
@@ -704,6 +762,22 @@ void init()
 	__enable_interrupt();
 
 	PRINTF(".%u.\r\n", curctx->task->idx);
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+	// Output enabled
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+	//
+	// Out high
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	// Out low
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+	for (uint32_t i = 0; i < LOOP_IDX; ++i) {}
 }
 
 	ENTRY_TASK(task_init)

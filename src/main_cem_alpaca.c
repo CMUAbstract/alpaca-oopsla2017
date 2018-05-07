@@ -29,17 +29,9 @@
 #define LETTER_SIZE_BITS             8
 #define NUM_LETTERS (LETTER_MASK + 1)
 
-// for timer
-unsigned overflow=0;
 __attribute__((interrupt(51))) 
 	void TimerB1_ISR(void){
-		TBCTL &= ~(0x0002);
-		if(TBCTL && 0x0001){
-			overflow++;
-			TBCTL |= 0x0004;
-			TBCTL |= (0x0002);
-			TBCTL &= ~(0x0001);	
-		}
+		PMMCTL0 = PMMPW | PMMSWPOR;
 	}
 __attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
 void(*__vector_timer0_b1)(void) = TimerB1_ISR;
@@ -55,18 +47,18 @@ typedef struct _node_t {
 	index_t child;   // link-list of children
 } node_t;
 
-TASK(1, task_init)
-TASK(2, task_init_dict)
-TASK(3, task_sample)
-TASK(4, task_measure_temp)
-TASK(5, task_letterize)
-TASK(6, task_compress)
-TASK(7, task_find_sibling)
-TASK(8, task_add_node)
-TASK(9, task_add_insert)
-TASK(10, task_append_compressed)
-TASK(11, task_print)
-TASK(12, task_done)
+TASK(task_init)
+TASK(task_init_dict)
+TASK(task_sample)
+TASK(task_measure_temp)
+TASK(task_letterize)
+TASK(task_compress)
+TASK(task_find_sibling)
+TASK(task_add_node)
+TASK(task_add_insert)
+TASK(task_append_compressed)
+TASK(task_print)
+TASK(task_done)
 
 GLOBAL_SB(letter_t, letter);
 GLOBAL_SB(unsigned, letter_idx);
@@ -94,24 +86,15 @@ static void init_hw()
 
 void init()
 {
-	// only for timers
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-//	*timer &= ~(0x0020); //set bit 5 to zero(halt!)
-#endif
+//	BITSET(TBCCTL1 , CCIE);
+//	TBCCR1 = 20;
+//	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+
 	init_hw();
-#ifdef CONFIG_EDB
-	edb_init();
-#endif
 
 	INIT_CONSOLE();
 	__enable_interrupt();
-	PRINTF(".%u.\r\n", curctx->task->idx);
+	PRINTF(".%x.\r\n", curctx->task);
 }
 
 static sample_t acquire_sample(letter_t prev_sample)
@@ -348,25 +331,25 @@ void task_print()
 {
 	unsigned i;
 
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-	BLOCK_PRINTF_BEGIN();
-	BLOCK_PRINTF("compressed block:\r\n");
-	for (i = 0; i < BLOCK_SIZE; ++i) {
-		index_t index = GV(compressed_data, i).letter;
-		BLOCK_PRINTF("%04x ", index);
-		if (i > 0 && (i + 1) % 8 == 0){
-			BLOCK_PRINTF("\r\n");
-		}
-	}
-	BLOCK_PRINTF("\r\n");
-	BLOCK_PRINTF("rate: samples/block: %u/%u\r\n", GV(sample_count), BLOCK_SIZE);
-	BLOCK_PRINTF_END();
+	//BLOCK_PRINTF_BEGIN();
+	//BLOCK_PRINTF("compressed block:\r\n");
+	//for (i = 0; i < BLOCK_SIZE; ++i) {
+	//	index_t index = GV(compressed_data, i).letter;
+	//	BLOCK_PRINTF("%04x ", index);
+	//	if (i > 0 && (i + 1) % 8 == 0){
+	//		BLOCK_PRINTF("\r\n");
+	//	}
+	//}
+	//BLOCK_PRINTF("\r\n");
+	//BLOCK_PRINTF("rate: samples/block: %u/%u\r\n", GV(sample_count), BLOCK_SIZE);
+	//BLOCK_PRINTF_END();
+	PRINTF("%u/%u\r\n", GV(sample_count), BLOCK_SIZE);
 	TRANSITION_TO(task_done); 
 }
 
 void task_done()
 {
-	//	TRANSITION_TO(task_init);
+		TRANSITION_TO(task_init);
 }
 
 	ENTRY_TASK(task_init)

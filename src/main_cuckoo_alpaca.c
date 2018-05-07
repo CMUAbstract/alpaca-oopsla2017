@@ -20,23 +20,6 @@
 #include "pins.h"
 
 // timer for measuring performance
-unsigned volatile *timer = &TBCTL;
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-	void TimerB1_ISR(void){
-		TBCTL &= ~(0x0002);
-		if(TBCTL && 0x0001){
-			overflow++;
-			TBCTL |= 0x0004;
-			TBCTL |= (0x0002);
-			TBCTL &= ~(0x0001);	
-		}
-	}
-
-//unsigned count = 0;
-
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 #define NUM_INSERTS (NUM_BUCKETS / 4) // shoot for 25% occupancy
 #define NUM_LOOKUPS NUM_INSERTS
@@ -59,26 +42,26 @@ typedef struct _lookup_count {
 	unsigned member_count;
 } lookup_count_t;
 
-TASK(1,  task_init)
-TASK(2,  task_generate_key)
-TASK(3,  task_insert)
-TASK(4,  task_calc_indexes)
-TASK(5,  task_calc_indexes_index_1)
-TASK(6,  task_calc_indexes_index_2)
-TASK(7,  task_add) // TODO: rename: add 'insert' prefix
-TASK(8,  task_relocate)
-TASK(9,  task_insert_done)
-TASK(10, task_lookup)
-TASK(11, task_lookup_search)
-TASK(12, task_lookup_done)
-TASK(13, task_print_stats)
-TASK(14, task_done)
-TASK(15, task_init_array)
+TASK(task_init)
+TASK(task_generate_key)
+TASK(task_insert)
+TASK(task_calc_indexes)
+TASK(task_calc_indexes_index_1)
+TASK(task_calc_indexes_index_2)
+TASK(task_add) // TODO: rename: add 'insert' prefix
+TASK(task_relocate)
+TASK(task_insert_done)
+TASK(task_lookup)
+TASK(task_lookup_search)
+TASK(task_lookup_done)
+TASK(task_print_stats)
+TASK(task_done)
+TASK(task_init_array)
 
 GLOBAL_SB(fingerprint_t, filter, NUM_BUCKETS);
 GLOBAL_SB(index_t, index);
 GLOBAL_SB(value_t, key);
-GLOBAL_SB(task_t*, next_task);
+GLOBAL_SB(task_func_t*, next_task);
 GLOBAL_SB(fingerprint_t, fingerprint);
 GLOBAL_SB(value_t, index1);
 GLOBAL_SB(value_t, index2);
@@ -126,7 +109,7 @@ void task_init()
 	GV(inserted_count) = 0;
 	GV(member_count) = 0;
 	GV(key) = init_key;
-	GV(next_task) = TASK_REF(task_insert);
+	GV(next_task) = &(task_insert);
 	LOG("init end!!\r\n");
 	TRANSITION_TO(task_generate_key);
 }
@@ -154,7 +137,7 @@ void task_generate_key()
 	// that that are no false negatives (and avoid having to save the values).
 	GV(key) = (GV(key) + 1) * 17;
 	LOG("generate_key: key: %x\r\n", GV(key));
-	transition_to(GV(next_task));
+	TRANSITION_TO(*GV(next_task));
 }
 
 void task_calc_indexes()
@@ -179,7 +162,7 @@ void task_calc_indexes_index_2()
 
 	LOG("calc indexes: index2: fp hash: %04x idx1 %u idx2 %u\r\n",
 			fp_hash, GV(index1), GV(index2));
-	transition_to(GV(next_task));
+	TRANSITION_TO(*GV(next_task));
 }
 
 // This task is redundant.
@@ -187,7 +170,7 @@ void task_calc_indexes_index_2()
 void task_insert()
 {
 	LOG("insert: key %04x\r\n", GV(key));
-	GV(next_task) = TASK_REF(task_add);
+	GV(next_task) = &(task_add);
 	TRANSITION_TO(task_calc_indexes);
 }
 
@@ -293,10 +276,10 @@ void task_insert_done()
 	LOG("insert done: insert %u inserted %u\r\n", GV(insert_count), GV(inserted_count));
 
 	if (GV(insert_count) < NUM_INSERTS) {
-		GV(next_task) = TASK_REF(task_insert);
+		GV(next_task) = &(task_insert);
 		TRANSITION_TO(task_generate_key);
 	} else {
-		GV(next_task) = TASK_REF(task_lookup);
+		GV(next_task) = &(task_lookup);
 		GV(key) = init_key;
 		TRANSITION_TO(task_generate_key);
 	}
@@ -305,7 +288,7 @@ void task_insert_done()
 void task_lookup()
 {
 	LOG("lookup: key %04x\r\n", GV(key));
-	GV(next_task) = TASK_REF(task_lookup_search);
+	GV(next_task) = &(task_lookup_search);
 	TRANSITION_TO(task_calc_indexes);
 }
 
@@ -344,7 +327,7 @@ void task_lookup_done()
 	LOG("lookup done: lookups %u members %u\r\n", GV(lookup_count), GV(member_count));
 
 	if (GV(lookup_count) < NUM_LOOKUPS) {
-		GV(next_task) = TASK_REF(task_lookup);
+		GV(next_task) = &(task_lookup);
 		TRANSITION_TO(task_generate_key);
 	} else {
 		TRANSITION_TO(task_print_stats);
@@ -355,16 +338,15 @@ void task_print_stats()
 {
 	unsigned i;
 
-	PRINTF("REAL TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-	BLOCK_PRINTF_BEGIN();
-	BLOCK_PRINTF("filter:\r\n");
-	for (i = 0; i < NUM_BUCKETS; ++i) {
-		BLOCK_PRINTF("%04x ", GV(filter, i));
-		if (i > 0 && (i + 1) % 8 == 0){
-			BLOCK_PRINTF("\r\n");
-		}
-	}
-	BLOCK_PRINTF_END();
+	//BLOCK_PRINTF_BEGIN();
+	//BLOCK_PRINTF("filter:\r\n");
+	//for (i = 0; i < NUM_BUCKETS; ++i) {
+	//	BLOCK_PRINTF("%04x ", GV(filter, i));
+	//	if (i > 0 && (i + 1) % 8 == 0){
+	//		BLOCK_PRINTF("\r\n");
+	//	}
+	//}
+	//BLOCK_PRINTF_END();
 	PRINTF("stats: inserts %u members %u total %u\r\n",
 			GV(inserted_count), GV(member_count), NUM_INSERTS);
 	TRANSITION_TO(task_done);
@@ -375,9 +357,8 @@ void task_done()
 //	count++;
 //	if(count == 5){
 //		count = 0;
-		exit(0);
 //	}
-//	TRANSITION_TO(task_init);
+	TRANSITION_TO(task_init);
 }
 static void init_hw()
 {
@@ -389,26 +370,14 @@ static void init_hw()
 void init()
 {
 	// set timer for measuring time
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-#endif
 	//	*timer &= ~(0x0020); //set bit 5 to zero(halt!)
 	init_hw();
-
-#ifdef CONFIG_EDB
-	edb_init();
-#endif
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
 
-	PRINTF(".%u.\r\n", curctx->task->idx);
+	PRINTF(".%x.\r\n", curctx->task);
 }
 
 	ENTRY_TASK(task_init)

@@ -54,19 +54,6 @@ typedef struct {
 #define BLINK_MESSAGE_DONE  (2 * SEC_TO_CYCLES)
 
 #define PRINT_HEX_ASCII_COLS 8
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 // #define SHOW_PROGRESS_ON_LED
 // #define SHOW_COARSE_PROGRESS_ON_LED
 
@@ -92,26 +79,26 @@ static __ro_nv const unsigned char PLAINTEXT[] =
 #define CYPHERTEXT_SIZE (NUM_PLAINTEXT_BLOCKS * NUM_DIGITS)
 
 
-	TASK(1,  task_init)
-	TASK(2,  task_pad)
-	TASK(3,  task_exp)
-	TASK(4,  task_mult_block)
-	TASK(5,  task_mult_block_get_result)
-	TASK(6,  task_square_base)
-	TASK(7,  task_square_base_get_result)
-	TASK(8,  task_print_cyphertext)
-	TASK(9,  task_mult_mod)
-	TASK(10, task_mult)
-	TASK(11, task_reduce_digits)
-	TASK(12, task_reduce_normalizable)
-	TASK(13, task_reduce_normalize)
-	TASK(14, task_reduce_n_divisor)
-	TASK(15, task_reduce_quotient)
-	TASK(16, task_reduce_multiply)
-	TASK(17, task_reduce_compare)
-	TASK(18, task_reduce_add)
-	TASK(19, task_reduce_subtract)
-TASK(20, task_print_product)
+TASK(task_init)
+TASK(task_pad)
+TASK(task_exp)
+TASK(task_mult_block)
+TASK(task_mult_block_get_result)
+TASK(task_square_base)
+TASK(task_square_base_get_result)
+TASK(task_print_cyphertext)
+TASK(task_mult_mod)
+TASK(task_mult)
+TASK(task_reduce_digits)
+TASK(task_reduce_normalizable)
+TASK(task_reduce_normalize)
+TASK(task_reduce_n_divisor)
+TASK(task_reduce_quotient)
+TASK(task_reduce_multiply)
+TASK(task_reduce_compare)
+TASK(task_reduce_add)
+TASK(task_reduce_subtract)
+TASK(task_print_product)
 
 	GLOBAL_SB(digit_t, product, 32);
 	GLOBAL_SB(digit_t, exponent);
@@ -127,9 +114,9 @@ TASK(20, task_print_product)
 	GLOBAL_SB(digit_t, cyphertext, CYPHERTEXT_SIZE);
 	GLOBAL_SB(unsigned, offset);
 	GLOBAL_SB(digit_t, n_div);
-	GLOBAL_SB(task_t*, next_task);
+	GLOBAL_SB(task_func_t*, next_task);
 	GLOBAL_SB(digit_t, product2, 32);
-	GLOBAL_SB(task_t*, next_task_print);
+	GLOBAL_SB(task_func_t*, next_task_print);
 	GLOBAL_SB(digit_t, block, 32);
 	GLOBAL_SB(unsigned, quotient);
 	GLOBAL_SB(bool, print_which);
@@ -143,24 +130,13 @@ static void init_hw()
 unsigned volatile *timer = &TBCTL;
 void init()
 {
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-#endif
 	init_hw();
 
-#ifdef CONFIG_EDB
-	edb_init();
-#endif
 	INIT_CONSOLE();
 
 	__enable_interrupt();
 
-	PRINTF(".%u.\r\n", curctx->task->idx);
+	PRINTF(".%x.\r\n", curctx->task);
 }
 
 void task_init()
@@ -251,7 +227,7 @@ void task_mult_block()
 	LOG("mult block\r\n");
 
 	// TODO: pass args to mult: message * base
-	GV(next_task) = TASK_REF(task_mult_block_get_result);
+	GV(next_task) = &(task_mult_block_get_result);
 	TRANSITION_TO(task_mult_mod);
 }
 
@@ -308,7 +284,7 @@ void task_square_base()
 {
 	LOG("square base\r\n");
 
-	GV(next_task) = TASK_REF(task_square_base_get_result);
+	GV(next_task) = &(task_square_base_get_result);
 	TRANSITION_TO(task_mult_mod);
 }
 
@@ -336,8 +312,6 @@ void task_print_cyphertext()
 
 	LOG("print cyphertext: len=%u\r\n", GV(cyphertext_len));
 
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-
 	BLOCK_PRINTF_BEGIN();
 	BLOCK_PRINTF("Cyphertext:\r\n");
 	for (i = 0; i < GV(cyphertext_len); ++i) {
@@ -358,9 +332,7 @@ void task_print_cyphertext()
 	}
 	BLOCK_PRINTF_END();
 
-	exit(0);
-	//TRANSITION_TO(task_init);
-	TRANSITION_TO(task_print_cyphertext);
+	TRANSITION_TO(task_init);
 }
 
 // TODO: this task also looks like a proxy: is it avoidable?
@@ -409,7 +381,7 @@ void task_mult()
 		GV(carry) = c;
 		TRANSITION_TO(task_mult);
 	} else {
-		GV(next_task_print) = TASK_REF(task_reduce_digits);
+		GV(next_task_print) = &(task_reduce_digits);
 		TRANSITION_TO(task_print_product);
 	}
 }
@@ -494,7 +466,7 @@ void task_reduce_normalizable()
 
 		// TODO: is this copy avoidable? a 'mult mod done' task doesn't help
 		// because we need to ship the data to it.
-		transition_to(GV(next_task));
+		TRANSITION_TO(*GV(next_task));
 	}
 
 	LOG("normalizable: %u\r\n", normalizable);
@@ -541,7 +513,7 @@ void task_reduce_normalize()
 	// To call the print task, we need to proxy the values we don't touch
 
 	if (GV(offset) > 0) { // l-1 > k-1 (loop bounds), where offset=l-k, where l=|m|,k=|n|
-		GV(next_task_print) = TASK_REF(task_reduce_n_divisor);
+		GV(next_task_print) = &(task_reduce_n_divisor);
 	} else {
 		LOG("reduce: normalize: reduction done: no digits to reduce\r\n");
 		// TODO: is this copy avoidable?
@@ -662,7 +634,7 @@ void task_reduce_multiply()
 
 	}
 	GV(print_which) = 1;
-	GV(next_task_print) = TASK_REF(task_reduce_compare);
+	GV(next_task_print) = &(task_reduce_compare);
 	TRANSITION_TO(task_print_product);
 }
 
@@ -740,7 +712,7 @@ void task_reduce_add()
 		GV(product, i) &= DIGIT_MASK;
 	}
 	GV(print_which) = 0;
-	GV(next_task_print) = TASK_REF(task_reduce_subtract);
+	GV(next_task_print) = &(task_reduce_subtract);
 	TRANSITION_TO(task_print_product);
 }
 
@@ -786,7 +758,7 @@ void task_reduce_subtract()
 	GV(print_which) = 0;
 
 	if (GV(reduce) + 1 > NUM_DIGITS) {
-		GV(next_task_print) = TASK_REF(task_reduce_quotient);
+		GV(next_task_print) = &(task_reduce_quotient);
 	} else { // reduction finished: exit from the reduce hypertask (after print)
 		LOG("reduce: subtract: reduction done\r\n");
 
@@ -801,7 +773,6 @@ void task_reduce_subtract()
 // TODO: eliminate from control graph when not verbose
 void task_print_product()
 {
-	const task_t* next_task;
 #if 0
 	int i;
 
@@ -816,7 +787,7 @@ void task_print_product()
 	}
 	LOG("\r\n");
 #endif
-	transition_to(GV(next_task_print));
+	TRANSITION_TO(*GV(next_task_print));
 }
 
 	ENTRY_TASK(task_init)

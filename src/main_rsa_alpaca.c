@@ -30,6 +30,13 @@
 #define DIGIT_MASK       0x00ff
 #define NUM_DIGITS       (KEY_SIZE_BITS / DIGIT_BITS)
 
+//__attribute__((interrupt(51))) 
+//	void TimerB1_ISR(void){
+//		PMMCTL0 = PMMPW | PMMSWPOR;
+//	}
+//__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+//void(*__vector_timer0_b1)(void) = TimerB1_ISR;
+
 /** @brief Type large enough to store a product of two digits */
 typedef uint16_t digit_t;
 //typedef uint8_t digit_t;
@@ -127,9 +134,11 @@ static void init_hw()
 	msp_gpio_unlock();
 	msp_clock_setup();
 }
-unsigned volatile *timer = &TBCTL;
 void init()
 {
+	//TBCCTL1 |= CCIE;
+	//TBCCR1 = 1000;
+	//TBCTL |= TBSSEL_1 | ID_3 | MC_2 | TBCLR;
 	init_hw();
 
 	INIT_CONSOLE();

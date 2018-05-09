@@ -27,9 +27,9 @@
 #define SAMPLE_NOISE_FLOOR 10 // TODO: made up value
 
 // Number of classifications to complete in one experiment
-#define SAMPLES_TO_COLLECT 128
+//#define SAMPLES_TO_COLLECT 128
+#define SAMPLES_TO_COLLECT 8
 
-unsigned volatile *timer = &TBCTL;
 typedef threeAxis_t_8 accelReading;
 typedef accelReading accelWindow[ACCEL_WINDOW_SIZE];
 
@@ -43,21 +43,6 @@ typedef enum {
 	CLASS_MOVING,
 } class_t;
 
-
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-	void TimerB1_ISR(void){
-		TBCTL &= ~(0x0002);
-		if(TBCTL && 0x0001){
-			overflow++;
-			TBCTL |= 0x0004;
-			TBCTL |= (0x0002);
-			TBCTL &= ~(0x0001);	
-		}
-	}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
-
 typedef enum {
 	// MODE_IDLE = (BIT(PIN_AUX_1) | BIT(PIN_AUX_2)),
 	//  MODE_TRAIN_STATIONARY = BIT(PIN_AUX_1),
@@ -68,17 +53,17 @@ typedef enum {
 	MODE_RECOGNIZE = 0, // default
 } run_mode_t;
 
-TASK(1, task_init)
-TASK(2, task_selectMode)
-TASK(3, task_resetStats)
-TASK(4, task_sample)
-TASK(5, task_transform)
-TASK(6, task_featurize)
-TASK(7, task_classify)
-TASK(8, task_stats)
-TASK(9, task_warmup)
-TASK(10, task_train)
-TASK(11, task_idle)
+TASK(task_init)
+TASK(task_selectMode)
+TASK(task_resetStats)
+TASK(task_sample)
+TASK(task_transform)
+TASK(task_featurize)
+TASK(task_classify)
+TASK(task_stats)
+TASK(task_warmup)
+TASK(task_train)
+TASK(task_idle)
 
 GLOBAL_SB(uint16_t, pinState);
 GLOBAL_SB(unsigned, discardedSamplesCount);
@@ -112,32 +97,15 @@ static void init_hw()
 
 void initializeHardware()
 {
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-#endif
-//	*timer &= ~(0x0020); //set bit 5 to zero(halt!)
 	threeAxis_t_8 accelID = {0};
 
 	init_hw();
-
-#ifdef CONFIG_EDB
-	edb_init();
-#endif
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
 
-	LOG("init: initializing accel\r\n");
-
-	LOG("init: accel hw id: 0x%x\r\n", accelID.x);
-
-	PRINTF(".%u.\r\n", curctx->task->idx);
+	PRINTF(".%x.\r\n", curctx->task);
 }
 
 void task_init()
@@ -155,12 +123,11 @@ void task_selectMode()
 	uint16_t pin_state=1;
 	++GV(count);
 	LOG("count: %u\r\n",count);
-	if(GV(count) >= 3) pin_state=2;
-	if(GV(count)>=5) pin_state=0;
-	if (GV(count) >= 7) {
-		PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-		while(1);
-		//TRANSITION_TO(task_init);
+	if(GV(count) >= 2) pin_state=2;
+	if(GV(count)>=3) pin_state=0;
+	if (GV(count) >= 4) {
+		PRINTF("done\r\n");
+		TRANSITION_TO(task_init);
 	}
 	run_mode_t mode;
 	class_t class;

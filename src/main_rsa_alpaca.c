@@ -321,25 +321,26 @@ void task_print_cyphertext()
 
 	LOG("print cyphertext: len=%u\r\n", GV(cyphertext_len));
 
-	BLOCK_PRINTF_BEGIN();
-	BLOCK_PRINTF("Cyphertext:\r\n");
-	for (i = 0; i < GV(cyphertext_len); ++i) {
-		c = GV(cyphertext, i);
-		BLOCK_PRINTF("%02x ", c);
-		line[j++] = c;
-		if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
-			BLOCK_PRINTF(" ");
-			for (j = 0; j < PRINT_HEX_ASCII_COLS; ++j) {
-				c = line[j];
-				if (!(32 <= c && c <= 127)) // not printable
-					c = '.';
-				BLOCK_PRINTF("%c", c);
-			}
-			j = 0;
-			BLOCK_PRINTF("\r\n");
-		}
-	}
-	BLOCK_PRINTF_END();
+	PRINTF("done\r\n");
+	//BLOCK_PRINTF_BEGIN();
+	//BLOCK_PRINTF("Cyphertext:\r\n");
+	//for (i = 0; i < GV(cyphertext_len); ++i) {
+	//	c = GV(cyphertext, i);
+	//	BLOCK_PRINTF("%02x ", c);
+	//	line[j++] = c;
+	//	if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
+	//		BLOCK_PRINTF(" ");
+	//		for (j = 0; j < PRINT_HEX_ASCII_COLS; ++j) {
+	//			c = line[j];
+	//			if (!(32 <= c && c <= 127)) // not printable
+	//				c = '.';
+	//			BLOCK_PRINTF("%c", c);
+	//		}
+	//		j = 0;
+	//		BLOCK_PRINTF("\r\n");
+	//	}
+	//}
+	//BLOCK_PRINTF_END();
 
 	TRANSITION_TO(task_init);
 }

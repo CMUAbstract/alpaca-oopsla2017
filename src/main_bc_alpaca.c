@@ -54,32 +54,16 @@ GLOBAL_SB(unsigned, func);
 GLOBAL_SB(uint32_t, seed);
 GLOBAL_SB(unsigned, iter);
 
-	TASK(1, task_init)
-	TASK(2, task_select_func)
-	TASK(3, task_bit_count)
-	TASK(4, task_bitcount)
-	TASK(5, task_ntbl_bitcnt)
-	TASK(6, task_ntbl_bitcount)
-	TASK(7, task_BW_btbl_bitcount)
-	TASK(8, task_AR_btbl_bitcount)
-	TASK(9, task_bit_shifter)
-TASK(10, task_end)
-
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
-
-unsigned volatile *timer = &TBCTL;
+TASK(task_init)
+TASK(task_select_func)
+TASK(task_bit_count)
+TASK(task_bitcount)
+TASK(task_ntbl_bitcnt)
+TASK(task_ntbl_bitcount)
+TASK(task_BW_btbl_bitcount)
+TASK(task_AR_btbl_bitcount)
+TASK(task_bit_shifter)
+TASK(task_end)
 
 static void init_hw()
 {
@@ -89,22 +73,12 @@ static void init_hw()
 }
 
 void init() {
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-//	*timer &= ~(0x0020); //set bit 5 to zero(halt!)
-#endif
 	init_hw();
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
-
-    PRINTF(".%u.\r\n", curctx->task->idx);
+	PRINTF(".%x.\r\n", curctx->task);
 }
 
 void task_init() {
@@ -301,7 +275,6 @@ void task_bit_shifter() {
 }
 
 void task_end() {
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
 	LOG("end\r\n");
 	PRINTF("%u\r\n", GV(n_0));
 	PRINTF("%u\r\n", GV(n_1));
@@ -310,9 +283,8 @@ void task_end() {
 	PRINTF("%u\r\n", GV(n_4));
 	PRINTF("%u\r\n", GV(n_5));
 	PRINTF("%u\r\n", GV(n_6));
-	exit(0);	
-//	TRANSITION_TO(task_end);
+	TRANSITION_TO(task_init);
 }
 
-	ENTRY_TASK(task_init)
+ENTRY_TASK(task_init)
 INIT_FUNC(init)

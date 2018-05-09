@@ -21,7 +21,6 @@
 #include "pins.h"
 
 #define LENGTH 13
-unsigned volatile *timer = &TBCTL;
 static __ro_nv const char cp[32] = {'1','2','3','4','5','6','7','8','9','0',
 	'A','B','C','D','E','F','F','E','D','C','B','A',
 	'0','9','8','7','6','5','4','3','2','1'}; //mimicing 16byte hex key (0x1234_5678_90ab_cdef_fedc_ba09_8765_4321)
@@ -303,54 +302,32 @@ static __ro_nv const uint32_t init_s3[256] = {
 	0xb74e6132L, 0xce77e25bL, 0x578fdfe3L, 0x3ac372e6L, 
 };
 
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-	void TimerB1_ISR(void){
-		TBCTL &= ~(0x0002);
-		if(TBCTL && 0x0001){
-			overflow++;
-			TBCTL |= 0x0004;
-			TBCTL |= (0x0002);
-			TBCTL &= ~(0x0001);	
-		}
-	}
+TASK(task_init)
+TASK(task_set_ukey)
+TASK(task_done)
+TASK(task_init_key)
+TASK(task_init_s)
+TASK(task_set_key)
+TASK(task_set_key2)
+TASK(task_encrypt)
+TASK(task_start_encrypt)
+TASK(task_start_encrypt2)
+TASK(task_start_encrypt3)
 
-
-// Have to define the vector table elements manually, because clang,
-// unlike gcc, does not generate sections for the vectors, it only
-// generates symbols (aliases). The linker script shipped in the
-// TI GCC distribution operates on sections, so we define a symbol and put it
-// in its own section here named as the linker script wants it.
-// The 2 bytes per alias symbol defined by clang are wasted.
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
-
-	TASK(1,  task_init)
-	TASK(2,  task_set_ukey)
-	TASK(3,  task_done)
-	TASK(4,  task_init_key)
-	TASK(5,  task_init_s)
-	TASK(6,  task_set_key)
-	TASK(7,  task_set_key2)
-	TASK(8,  task_encrypt)
-	TASK(8,  task_start_encrypt)
-	TASK(9,  task_start_encrypt2)
-TASK(10,  task_start_encrypt3)
-
-	GLOBAL_SB(uint8_t*, return_to);	
-	GLOBAL_SB(char, result, LENGTH);
-	GLOBAL_SB(unsigned char, ukey, 16);
-	GLOBAL_SB(uint32_t, s0, 256);
-	GLOBAL_SB(uint32_t, s1, 256);
-	GLOBAL_SB(uint32_t, s2, 256);
-	GLOBAL_SB(uint32_t, s3, 256);
-	GLOBAL_SB(unsigned, index);
-	GLOBAL_SB(uint32_t, index2);
-	GLOBAL_SB(unsigned, n);
-	GLOBAL_SB(task_t*, next_task);
-	GLOBAL_SB(uint32_t, input, 2);
-	GLOBAL_SB(unsigned char, iv, 8);
-	GLOBAL_SB(uint32_t, key, 18);
+GLOBAL_SB(uint8_t*, return_to);	
+GLOBAL_SB(char, result, LENGTH);
+GLOBAL_SB(unsigned char, ukey, 16);
+GLOBAL_SB(uint32_t, s0, 256);
+GLOBAL_SB(uint32_t, s1, 256);
+GLOBAL_SB(uint32_t, s2, 256);
+GLOBAL_SB(uint32_t, s3, 256);
+GLOBAL_SB(unsigned, index);
+GLOBAL_SB(uint32_t, index2);
+GLOBAL_SB(unsigned, n);
+GLOBAL_SB(task_func_t*, next_task);
+GLOBAL_SB(uint32_t, input, 2);
+GLOBAL_SB(unsigned char, iv, 8);
+GLOBAL_SB(uint32_t, key, 18);
 
 #if VERBOSE > 0
 	void print_long(uint32_t l) {
@@ -460,7 +437,7 @@ void task_set_key2() {
 		GV(input, 0) = 0;
 		GV(input, 1) = 0;
 		GV(index2) += 2;
-		GV(next_task) = TASK_REF(task_set_key2);
+		GV(next_task) = &(task_set_key2);
 
 		TRANSITION_TO(task_encrypt);
 	}
@@ -614,7 +591,7 @@ void task_encrypt() {
 	l ^= p;
 	GV(input, 1) = r;
 	GV(input, 0) = l;
-	transition_to(GV(next_task));
+	TRANSITION_TO(*GV(next_task));
 }
 
 void task_start_encrypt() {
@@ -629,7 +606,7 @@ void task_start_encrypt() {
 		GV(input, 1)|=((unsigned long)(GV(iv, 5)))<<16L;
 		GV(input, 1)|=((unsigned long)(GV(iv, 6)))<< 8L;
 		GV(input, 1)|=((unsigned long)(GV(iv, 7)));
-		GV(next_task) = TASK_REF(task_start_encrypt2);
+		GV(next_task) = &(task_start_encrypt2);
 		TRANSITION_TO(task_encrypt);
 	}
 	else {
@@ -671,10 +648,9 @@ void task_start_encrypt3() {
 
 void task_done()
 {
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-	exit(0);
+	PRINTF("done\r\n");
 
-	//    TRANSITION_TO(task_init);
+	TRANSITION_TO(task_init);
 }
 static void init_hw()
 {
@@ -685,25 +661,13 @@ static void init_hw()
 
 void init()
 {
-#ifdef BOARD_MSP_TS430
-	*timer &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	*timer |= 0x0200; //set 9 to one (SMCLK)
-	*timer |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	*timer &= 0xFFEF; //set bit 4 to zero
-	*timer |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	*timer |= 0x0002; //interrupt enable
-#endif
 	init_hw();
-
-#ifdef CONFIG_EDB
-	edb_init();
-#endif
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
 
-	PRINTF(".%u.\r\n", curctx->task->idx);
+	PRINTF(".%x.\r\n", curctx->task);
 }
 
 	ENTRY_TASK(task_init)

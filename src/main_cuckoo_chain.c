@@ -26,7 +26,6 @@
 //#define NUM_BUCKETS 256 // must be a power of 2
 #define NUM_BUCKETS 128 // must be a power of 2
 #define MAX_RELOCATIONS 8
-volatile unsigned work_x; //why does it has to be volatile?--cuz the value can change when power's dead?
 
 typedef uint16_t value_t;
 typedef uint16_t hash_t;
@@ -177,19 +176,6 @@ struct msg_count {
     CHAN_FIELD(unsigned, count);
 };
 
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 TASK(1,  task_init)
 TASK(2,  task_generate_key)
 TASK(3,  task_insert)
@@ -710,28 +696,27 @@ void task_print_stats()
                                      CH(task_insert_done, task_print_stats));
     unsigned member_count = *CHAN_IN1(unsigned, member_count,
                                      CH(task_lookup_done, task_print_stats));
-	PRINTF("REAL TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
     PRINTF("stats: inserts %u members %u total %u\r\n",
            inserted_count, member_count, NUM_INSERTS);
-    BLOCK_PRINTF_BEGIN();
-    BLOCK_PRINTF("filter:\r\n");
-    for (i = 0; i < NUM_BUCKETS; ++i) {
-        fingerprint_t fp = *CHAN_IN3(fingerprint_t, filter[i],
-                 MC_IN_CH(ch_filter, task_init, task_print_stats),
-                 MC_IN_CH(ch_filter_add, task_add, task_print_stats),
-                 MC_IN_CH(ch_filter_relocate, task_relocate, task_print_stats));
+    //BLOCK_PRINTF_BEGIN();
+    //BLOCK_PRINTF("filter:\r\n");
+    //for (i = 0; i < NUM_BUCKETS; ++i) {
+    //    fingerprint_t fp = *CHAN_IN3(fingerprint_t, filter[i],
+    //             MC_IN_CH(ch_filter, task_init, task_print_stats),
+    //             MC_IN_CH(ch_filter_add, task_add, task_print_stats),
+    //             MC_IN_CH(ch_filter_relocate, task_relocate, task_print_stats));
 
-        BLOCK_PRINTF("%04x ", fp);
-        if (i > 0 && (i + 1) % 8 == 0)
-            BLOCK_PRINTF("\r\n");
-    }
-    BLOCK_PRINTF_END();
+    //    BLOCK_PRINTF("%04x ", fp);
+    //    if (i > 0 && (i + 1) % 8 == 0)
+    //        BLOCK_PRINTF("\r\n");
+    //}
+    //BLOCK_PRINTF_END();
     TRANSITION_TO(task_done);
 }
 
 void task_done()
 {
-    TRANSITION_TO(task_done);
+    TRANSITION_TO(task_init);
 }
 static void init_hw()
 {
@@ -741,19 +726,7 @@ static void init_hw()
 }
 void init()
 {
-#ifdef BOARD_MSP_TS430
-	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	TBCTL |= 0x0200; //set 9 to one (SMCLK)
-	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	TBCTL &= 0xFFEF; //set bit 4 to zero
-	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	TBCTL |= 0x0002; //interrupt enable*/
-#endif
 	init_hw();
-#ifdef CONFIG_EDB
-    //debug_setup();
-    edb_init();
-#endif
 
     INIT_CONSOLE();
 

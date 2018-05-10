@@ -89,55 +89,16 @@ __nv unsigned seed = 1;
 #define SAMPLE_NOISE_FLOOR 10 // TODO: made up value
 
 // Number of classifications to complete in one experiment
-#define SAMPLES_TO_COLLECT 128
+#define SAMPLES_TO_COLLECT 8
+//#define SAMPLES_TO_COLLECT 128
 
-#define SEC_TO_CYCLES 4000000 /* 4 MHz */
-
-#define IDLE_WAIT SEC_TO_CYCLES
-
-#define IDLE_BLINKS 1
-#define IDLE_BLINK_DURATION SEC_TO_CYCLES
-#define SELECT_MODE_BLINKS  4
-#define SELECT_MODE_BLINK_DURATION  (SEC_TO_CYCLES / 5)
-#define SAMPLE_BLINKS  1
-#define SAMPLE_BLINK_DURATION  (SEC_TO_CYCLES * 2)
-#define FEATURIZE_BLINKS  2
-#define FEATURIZE_BLINK_DURATION  (SEC_TO_CYCLES * 2)
-#define CLASSIFY_BLINKS 1
-#define CLASSIFY_BLINK_DURATION (SEC_TO_CYCLES * 4)
-#define WARMUP_BLINKS 2
-#define WARMUP_BLINK_DURATION (SEC_TO_CYCLES / 2)
-#define TRAIN_BLINKS 1
-#define TRAIN_BLINK_DURATION (SEC_TO_CYCLES * 4)
-
-#define LED1 (1 << 0)
-#define LED2 (1 << 1)
-
-#ifdef ACCEL_16BIT_TYPE
-typedef threeAxis_t accelReading;
-#else // !ACCEL_16BIT_TYPE
 typedef threeAxis_t_8 accelReading;
-#endif // !ACCEL_16BIT_TYPE
 static void init_hw()
 {
 	msp_watchdog_disable();
 	msp_gpio_unlock();
 	msp_clock_setup();
 }
-unsigned overflow=0;
-//__attribute__((interrupt(TIMERB1_VECTOR))) 
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 typedef accelReading accelWindow[ACCEL_WINDOW_SIZE];
 
@@ -443,106 +404,100 @@ void recognize(model_t *model)
 
 run_mode_t select_mode(uint8_t *prev_pin_state)
 {
-    uint8_t pin_state = 1;
+	uint8_t pin_state = 1;
 
-	    DINO_MANUAL_VERSION_VAL(unsigned, count, count);
-    TASK_BOUNDARY(TASK_SELECT_MODE);
-	    DINO_MANUAL_RESTORE_VAL(count, count);
-	    count++;
-	    LOG("count: %u\r\n", count);
-	    if(count >= 3) pin_state = 2;
-	    if(count >= 5) pin_state = 0;
-	    if(count >= 7) {   
-		PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-		    while(1);
-		}
-    // Don't re-launch training after finishing training
-    if ((pin_state == MODE_TRAIN_STATIONARY ||
-        pin_state == MODE_TRAIN_MOVING) &&
-        pin_state == *prev_pin_state) {
-        pin_state = MODE_IDLE;
-    } else {
-        *prev_pin_state = pin_state;
-    }
+	DINO_MANUAL_VERSION_VAL(unsigned, count, count);
+	TASK_BOUNDARY(TASK_SELECT_MODE);
+	DINO_MANUAL_RESTORE_VAL(count, count);
+	count++;
+	LOG("count: %u\r\n", count);
+	if(count >= 2) pin_state = 2;
+	if(count >= 3) pin_state = 0;
+	if(count >= 4) {   
+		PRINTF("end\r\n");
+		count = 0;
+		seed = 1;
+		*prev_pin_state = MODE_IDLE;
+		pin_state = 99;
+	}
+	// Don't re-launch training after finishing training
+	if ((pin_state == MODE_TRAIN_STATIONARY ||
+				pin_state == MODE_TRAIN_MOVING) &&
+			pin_state == *prev_pin_state) {
+		pin_state = MODE_IDLE;
+	} else {
+		*prev_pin_state = pin_state;
+	}
 
-    LOG("selectMode: pins %04x\r\n", pin_state);
+	LOG("selectMode: pins %04x\r\n", pin_state);
 
-    return (run_mode_t)pin_state;
+	return (run_mode_t)pin_state;
 }
 
 static void init_accel()
 {
 #ifdef ACCEL_16BIT_TYPE
-    threeAxis_t accelID = {0};
+	threeAxis_t accelID = {0};
 #else
-    threeAxis_t_8 accelID = {0};
+	threeAxis_t_8 accelID = {0};
 #endif
 }
 
 void init()
 {
-#ifdef BOARD_MSP_TS430
-	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	TBCTL |= 0x0200; //set 9 to one (SMCLK)
-	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	TBCTL &= 0xFFEF; //set bit 4 to zero
-	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	TBCTL |= 0x0002; //interrupt enable
-#endif
 	init_hw();
-#ifdef CONFIG_EDB
-    edb_init();
-#endif
 
-    INIT_CONSOLE();
+	INIT_CONSOLE();
 
-    __enable_interrupt();
-    init_accel();
+	__enable_interrupt();
 
-    PRINTF(".%u.\r\n", curtask);
+	PRINTF(".%u.\r\n", curtask);
 }
 
 int main()
 {
-    // "Globals" must be on the stack because Mementos doesn't handle real
-    // globals correctly
-    uint8_t prev_pin_state = MODE_IDLE;
+	// "Globals" must be on the stack because Mementos doesn't handle real
+	// globals correctly
+	uint8_t prev_pin_state = MODE_IDLE;
 
 #if defined(MEMENTOS) && !defined(MEMENTOS_NONVOLATILE)
-    model_t model;
+	model_t model;
 #else
-    static __nv model_t model;
+	static __nv model_t model;
 #endif
 
 #ifndef MEMENTOS
-    init();
+	init();
 #endif
 
-    DINO_RESTORE_CHECK();
+	DINO_RESTORE_CHECK();
 
-    while (1)
-    {
-	    TASK_BOUNDARY(TASK_COUNT);
-	    DINO_MANUAL_RESTORE_NONE();
-        run_mode_t mode = select_mode(&prev_pin_state);
-        switch (mode) {
-            case MODE_TRAIN_STATIONARY:
-                LOG("mode: stationary\r\n");
-                train(model.stationary);
-                break;
-            case MODE_TRAIN_MOVING:
-                LOG("mode: moving\r\n");
-                train(model.moving);
-                break;
-            case MODE_RECOGNIZE:
-                LOG("mode: recognize\r\n");
-                recognize(&model);
-                break;
-            default:
-                LOG("mode: idle\r\n");
-                break;
-        }
-    }
+	while (1)
+	{
+		if (count == 0) {
+			PRINTF("start\r\n");
+		}
+		TASK_BOUNDARY(TASK_COUNT);
+		DINO_MANUAL_RESTORE_NONE();
+		run_mode_t mode = select_mode(&prev_pin_state);
+		switch (mode) {
+			case MODE_TRAIN_STATIONARY:
+				LOG("mode: stationary\r\n");
+				train(model.stationary);
+				break;
+			case MODE_TRAIN_MOVING:
+				LOG("mode: moving\r\n");
+				train(model.moving);
+				break;
+			case MODE_RECOGNIZE:
+				LOG("mode: recognize\r\n");
+				recognize(&model);
+				break;
+			default:
+				LOG("mode: idle\r\n");
+				break;
+		}
+	}
 
-    return 0;
+	return 0;
 }

@@ -22,21 +22,6 @@
 #define ITER 100
 #define CHAR_BIT 8
 
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
-
-
 __nv static char bits[256] =
 {
       0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,  /* 0   - 15  */
@@ -284,15 +269,6 @@ static void init_hw()
 }
 
 void init() {
-#ifdef BOARD_MSP_TS430
-	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	TBCTL |= 0x0200; //set 9 to one (SMCLK)
-	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	TBCTL &= 0xFFEF; //set bit 4 to zero
-	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	TBCTL |= 0x0002; //interrupt enable
-#endif
-//	TBCTL &= ~(0x0020); //halt
 	init_hw();
 
 	INIT_CONSOLE();
@@ -632,7 +608,6 @@ void task_end() {
 	unsigned n_4 = *CHAN_IN1(unsigned, n, CH(task_BW_btbl_bitcount, task_end));
 	unsigned n_5 = *CHAN_IN1(unsigned, n, CH(task_AR_btbl_bitcount, task_end));
 	unsigned n_6 = *CHAN_IN1(unsigned, n, CH(task_bit_shifter, task_end));
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
 	PRINTF("%u\r\n", n_0);
 	PRINTF("%u\r\n", n_1);
 	PRINTF("%u\r\n", n_2);
@@ -640,8 +615,7 @@ void task_end() {
 	PRINTF("%u\r\n", n_4);
 	PRINTF("%u\r\n", n_5);
 	PRINTF("%u\r\n", n_6);
-	while(1);
-//	TRANSITION_TO(task_init);
+	TRANSITION_TO(task_init);
 }
 
 	ENTRY_TASK(task_init)

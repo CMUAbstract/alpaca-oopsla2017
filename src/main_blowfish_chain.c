@@ -303,28 +303,6 @@ static __ro_nv const uint32_t init_s3[256] = {
 	0xb74e6132L, 0xce77e25bL, 0x578fdfe3L, 0x3ac372e6L, 
 };
 
-unsigned overflow=0;
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-
-
-// Have to define the vector table elements manually, because clang,
-// unlike gcc, does not generate sections for the vectors, it only
-// generates symbols (aliases). The linker script shipped in the
-// TI GCC distribution operates on sections, so we define a symbol and put it
-// in its own section here named as the linker script wants it.
-// The 2 bytes per alias symbol defined by clang are wasted.
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
-
 struct msg_s {
     CHAN_FIELD_ARRAY(uint32_t, s0, 256);
     CHAN_FIELD_ARRAY(uint32_t, s1, 256);
@@ -402,9 +380,9 @@ TASK(5,  task_init_s)
 TASK(6,  task_set_key)
 TASK(7,  task_set_key2)
 TASK(8,  task_encrypt)
-TASK(8,  task_start_encrypt)
-TASK(9,  task_start_encrypt2)
-TASK(10,  task_start_encrypt3)
+TASK(9,  task_start_encrypt)
+TASK(10,  task_start_encrypt2)
+TASK(11,  task_start_encrypt3)
 
 MULTICAST_CHANNEL(msg_iv, ch_iv, task_init, task_start_encrypt, task_start_encrypt2);
 MULTICAST_CHANNEL(msg_index2, ch_index2, task_init, task_set_key2, task_start_encrypt3);
@@ -475,17 +453,17 @@ void task_init_key() {
 void task_init_s() {
 	unsigned i;
 	unsigned index = *CHAN_IN2(uint16_t, index, CH(task_init, task_init_s), SELF_CH(task_init_s));
-	for (i = 0; i < 256; ++i){
-		if(index == 0)
-			CHAN_OUT1(uint32_t, s0[i], init_s0[i], CH(task_init_s, task_encrypt));
-		else if(index == 1)
-			CHAN_OUT1(uint32_t, s1[i], init_s1[i], CH(task_init_s, task_encrypt));
-		else if(index == 2)
-			CHAN_OUT1(uint32_t, s2[i], init_s2[i], CH(task_init_s, task_encrypt));
-		else if(index == 3)
-			CHAN_OUT1(uint32_t, s3[i], init_s3[i], CH(task_init_s, task_encrypt));
+	for (i = 0; i < 128; ++i){
+		if(index == 0 || index == 1)
+			CHAN_OUT1(uint32_t, s0[index*128 + i], init_s0[index*128 + i], CH(task_init_s, task_encrypt));
+		else if(index == 2 || index == 3)
+			CHAN_OUT1(uint32_t, s1[(index-2)*128 + i], init_s1[(index-2)*128 + i], CH(task_init_s, task_encrypt));
+		else if(index == 4 || index == 5)
+			CHAN_OUT1(uint32_t, s2[(index-4)*128 + i], init_s2[(index-4)*128 + i], CH(task_init_s, task_encrypt));
+		else if(index == 6 || index == 7)
+			CHAN_OUT1(uint32_t, s3[(index-6)*128 + i], init_s3[(index-6)*128 + i], CH(task_init_s, task_encrypt));
 	}
-	if(index == 3){
+	if(index == 7){
 		TRANSITION_TO(task_set_key);
 	}
 	else {
@@ -493,17 +471,6 @@ void task_init_s() {
 		CHAN_OUT1(uint16_t, index, index, SELF_CH(task_init_s));
 		TRANSITION_TO(task_init_s);
 	}
-/*	for (i = 0; i < 1024; ++i) {
-		if (i < 256) 
-			CHAN_OUT1(uint32_t, s0[i], init_s0[i],CH(task_init_s, task_encrypt));
-		else if (i < 256*2)
-			CHAN_OUT1(uint32_t, s1[i-256], init_s1[i-256], CH(task_init_s, task_encrypt));
-		else if (i < 256*3)
-			CHAN_OUT1(uint32_t, s2[i-256*2], init_s2[i-256*2],CH(task_init_s, task_encrypt));
-		else 
-			CHAN_OUT1(uint32_t, s3[i-256*3], init_s3[i-256*3],CH(task_init_s, task_encrypt));
-	}
-	TRANSITION_TO(task_set_key);*/
 }
 void task_set_key() {
 	unsigned i;
@@ -833,9 +800,9 @@ void task_start_encrypt3() {
 
 void task_done()
 {
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
+	PRINTF("done\r\n");
 
-//	TRANSITION_TO(task_init);
+	TRANSITION_TO(task_init);
 }
 static void init_hw()
 {
@@ -846,18 +813,6 @@ static void init_hw()
 
 void init()
 {
-#ifdef BOARD_MSP_TS430
-	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	TBCTL |= 0x0200; //set 9 to one (SMCLK)
-	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	TBCTL &= 0xFFEF; //set bit 4 to zero
-	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	TBCTL |= 0x0002; //interrupt enable
-#endif
-
-#ifdef CONFIG_EDB
-	edb_init();
-#endif
     	init_hw();
 
     INIT_CONSOLE();

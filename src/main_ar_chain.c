@@ -34,29 +34,8 @@
 #define SAMPLE_NOISE_FLOOR 10 // TODO: made up value
 
 // Number of classifications to complete in one experiment
-#define SAMPLES_TO_COLLECT 128
-
-#define SEC_TO_CYCLES 4000000 /* 4 MHz */
-
-#define IDLE_WAIT SEC_TO_CYCLES
-
-#define IDLE_BLINKS 1
-#define IDLE_BLINK_DURATION SEC_TO_CYCLES
-#define SELECT_MODE_BLINKS  4
-#define SELECT_MODE_BLINK_DURATION  (SEC_TO_CYCLES / 5)
-#define SAMPLE_BLINKS  1
-#define SAMPLE_BLINK_DURATION  (SEC_TO_CYCLES * 2)
-#define FEATURIZE_BLINKS  2
-#define FEATURIZE_BLINK_DURATION  (SEC_TO_CYCLES * 2)
-#define CLASSIFY_BLINKS 1
-#define CLASSIFY_BLINK_DURATION (SEC_TO_CYCLES * 4)
-#define WARMUP_BLINKS 2
-#define WARMUP_BLINK_DURATION (SEC_TO_CYCLES / 2)
-#define TRAIN_BLINKS 1
-#define TRAIN_BLINK_DURATION (SEC_TO_CYCLES * 4)
-
-#define LED1 (1 << 0)
-#define LED2 (1 << 1)
+//#define SAMPLES_TO_COLLECT 128
+#define SAMPLES_TO_COLLECT 8
 
 typedef threeAxis_t_8 accelReading;
 typedef accelReading accelWindow[ACCEL_WINDOW_SIZE];
@@ -185,20 +164,6 @@ struct msg_count {
 struct msg_seed {
 	CHAN_FIELD(unsigned, seed);
 };
-unsigned overflow=0;
-//__attribute__((interrupt(TIMERB1_VECTOR))) 
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 TASK(1, task_init)
 TASK(2, task_selectMode)
@@ -269,21 +234,7 @@ static void init_hw()
 
 void initializeHardware()
 {
-#ifdef BOARD_MSP_TS430
-	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	TBCTL |= 0x0200; //set 9 to one (SMCLK)
-	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	TBCTL &= 0xFFEF; //set bit 4 to zero
-	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	TBCTL |= 0x0002; //interrupt enable
-#endif
-    threeAxis_t_8 accelID = {0};
-
 	init_hw();
-
-#ifdef CONFIG_EDB
-	edb_init();
-#endif
 
     INIT_CONSOLE();
 
@@ -314,12 +265,11 @@ void task_selectMode()
     count++;
 	CHAN_OUT1(unsigned, count, count, SELF_CH(task_init));
 	//LOG("count: %u\r\n",count);
-	if(count >= 3) pin_state=2;
-	if(count>=5) pin_state=0;
-	if (count >= 7){
-		PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-		while(1);
-		//TRANSITION_TO(task_init);
+	if(count >= 2) pin_state=2;
+	if(count>=3) pin_state=0;
+	if (count >= 4){
+		PRINTF("done\r\n");
+		TRANSITION_TO(task_init);
 	}
     run_mode_t mode;
     class_t class;

@@ -228,20 +228,6 @@ CHANNEL(task_add_insert, task_append_compressed, msg_symbol);
 SELF_CHANNEL(task_append_compressed, msg_self_out_len);
 CHANNEL(task_append_compressed, task_print, msg_compressed_data);
 CHANNEL(task_append_compressed, task_compress, msg_sample_count);
-unsigned overflow=0;
-//__attribute__((interrupt(TIMERB1_VECTOR))) 
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 static void init_hw()
 {
@@ -251,19 +237,7 @@ static void init_hw()
 }
 void init()
 {
-#ifdef BOARD_MSP_TS430
-	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	TBCTL |= 0x0200; //set 9 to one (SMCLK)
-	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	TBCTL &= 0xFFEF; //set bit 4 to zero
-	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	TBCTL |= 0x0002; //interrupt enable
-#endif
 	init_hw();
-
-#ifdef CONFIG_EDB
-	edb_init(); 
-#endif
 
 	INIT_CONSOLE();
 
@@ -702,26 +676,26 @@ void task_print()
 
 	unsigned sample_count = *CHAN_IN1(unsigned, sample_count,
 			CH(task_append_compressed, task_print));
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
-	BLOCK_PRINTF_BEGIN();
-	BLOCK_PRINTF("compressed block:\r\n");
-	for (i = 0; i < BLOCK_SIZE; ++i) {
-		index_t index = *CHAN_IN1(index_t, compressed_data[i],
-				CH(task_append_compressed, task_print));
-		BLOCK_PRINTF("%04x ", index);
-		if (i > 0 && (i + 1) % 8 == 0)
-			BLOCK_PRINTF("\r\n");
-	}
-	BLOCK_PRINTF("\r\n");
-	BLOCK_PRINTF("rate: samples/block: %u/%u\r\n", sample_count, BLOCK_SIZE);
-	BLOCK_PRINTF_END();
+	PRINTF("rate: samples/block: %u/%u\r\n", sample_count, BLOCK_SIZE);
+	//BLOCK_PRINTF_BEGIN();
+	//BLOCK_PRINTF("compressed block:\r\n");
+	//for (i = 0; i < BLOCK_SIZE; ++i) {
+	//	index_t index = *CHAN_IN1(index_t, compressed_data[i],
+	//			CH(task_append_compressed, task_print));
+	//	BLOCK_PRINTF("%04x ", index);
+	//	if (i > 0 && (i + 1) % 8 == 0)
+	//		BLOCK_PRINTF("\r\n");
+	//}
+	//BLOCK_PRINTF("\r\n");
+	//BLOCK_PRINTF("rate: samples/block: %u/%u\r\n", sample_count, BLOCK_SIZE);
+	//BLOCK_PRINTF_END();
 	//TRANSITION_TO(task_sample); // restart app
 	TRANSITION_TO(task_done); // for now just do one block
 }
 
 void task_done()
 {
-	TRANSITION_TO(task_done);
+	TRANSITION_TO(task_init);
 }
 
 	ENTRY_TASK(task_init)

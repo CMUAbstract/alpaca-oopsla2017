@@ -28,21 +28,6 @@
 #include "pins.h"
 #define LENGTH 13
 
-bool test11 = 0;
-unsigned overflow=0;
-//__attribute__((interrupt(TIMERB1_VECTOR))) 
-__attribute__((interrupt(51))) 
-void TimerB1_ISR(void){
-	TBCTL &= ~(0x0002);
-	if(TBCTL && 0x0001){
-		overflow++;
-		TBCTL |= 0x0004;
-		TBCTL |= (0x0002);
-		TBCTL &= ~(0x0001);	
-	}
-}
-__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 static __nv unsigned curtask;
 
 /* This is for progress reporting only */
@@ -576,9 +561,7 @@ void BF_cfb64_encrypt(unsigned char* out, unsigned char* iv, uint32_t *key){
 			ti[1]|=((unsigned long)(iv[5]))<<16L;
 			ti[1]|=((unsigned long)(iv[6]))<< 8L;
 			ti[1]|=((unsigned long)(iv[7]));
-			test11 = 1;
 			BF_encrypt(ti, key);
-			test11 = 0;
 
 			iv[0] = (unsigned char)(((ti[0])>>24L)&0xff);
 			iv[1] = (unsigned char)(((ti[0])>>16L)&0xff);
@@ -615,6 +598,7 @@ int main()
 	unsigned char ukey[16];
 	unsigned char indata[40], outdata[40], ivec[8];
 
+	while(1){
 	unsigned i = 0, by = 0;	
 
 	for (i = 0; i < 8; ++i){
@@ -658,7 +642,7 @@ int main()
 	}
 	BF_set_key(ukey, key);
 	BF_cfb64_encrypt(outdata, ivec, key);
-	PRINTF("TIME end is 65536*%u+%u\r\n",overflow,(unsigned)TBR);
+}
 }
 
 

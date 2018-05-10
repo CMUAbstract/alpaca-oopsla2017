@@ -97,8 +97,6 @@ static void init_hw()
 
 void initializeHardware()
 {
-	threeAxis_t_8 accelID = {0};
-
 	init_hw();
 
 	INIT_CONSOLE();

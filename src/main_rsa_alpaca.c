@@ -3,11 +3,18 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-//#include <libwispbase/wisp-base.h>
+#include <libwispbase/wisp-base.h>
 //#include <wisp-base.h>
 #include <libalpaca/alpaca.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -25,17 +32,18 @@
 
 //#include "../data/keysize.h"
 
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
+
 #define KEY_SIZE_BITS    64
 #define DIGIT_BITS       8 // arithmetic ops take 8-bit args produce 16-bit result
 #define DIGIT_MASK       0x00ff
 #define NUM_DIGITS       (KEY_SIZE_BITS / DIGIT_BITS)
-
-//__attribute__((interrupt(51))) 
-//	void TimerB1_ISR(void){
-//		PMMCTL0 = PMMPW | PMMSWPOR;
-//	}
-//__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
-//void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 /** @brief Type large enough to store a product of two digits */
 typedef uint16_t digit_t;
@@ -136,20 +144,39 @@ static void init_hw()
 }
 void init()
 {
-	//TBCCTL1 |= CCIE;
-	//TBCCR1 = 1000;
-	//TBCTL |= TBSSEL_1 | ID_3 | MC_2 | TBCLR;
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 40;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+
 	init_hw();
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 	PRINTF(".%x.\r\n", curctx->task);
 }
 
 void task_init()
 {
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
 	int i;
 	unsigned message_length = sizeof(PLAINTEXT) - 1; // skip the terminating null byte
 
@@ -273,7 +300,7 @@ void task_mult_block_get_result()
 			}
 
 		} else {
-			printf("WARN: block dropped: cyphertext overlow [%u > %u]\r\n",
+			PRINTF("WARN: block dropped: cyphertext overlow [%u > %u]\r\n",
 					GV(cyphertext_len) + NUM_DIGITS, CYPHERTEXT_SIZE);
 			// carry on encoding, though
 		}
@@ -341,6 +368,8 @@ void task_print_cyphertext()
 	//	}
 	//}
 	//BLOCK_PRINTF_END();
+	GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 
 	TRANSITION_TO(task_init);
 }

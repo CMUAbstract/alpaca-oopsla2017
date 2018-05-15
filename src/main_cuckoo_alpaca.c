@@ -5,9 +5,17 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include <libwispbase/wisp-base.h>
 #include <libalpaca/alpaca.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -26,6 +34,14 @@
 #define NUM_BUCKETS 128 // must be a power of 2
 #define MAX_RELOCATIONS 8
 #define BUFFER_SIZE 32
+
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 typedef uint16_t value_t;
 typedef uint16_t hash_t;
@@ -57,6 +73,7 @@ TASK(task_lookup_done)
 TASK(task_print_stats)
 TASK(task_done)
 TASK(task_init_array)
+TASK(task_init_loop)
 
 GLOBAL_SB(fingerprint_t, filter, NUM_BUCKETS);
 GLOBAL_SB(index_t, index);
@@ -72,6 +89,7 @@ GLOBAL_SB(value_t, lookup_count);
 GLOBAL_SB(value_t, member_count);
 GLOBAL_SB(bool, success);
 GLOBAL_SB(bool, member);
+GLOBAL_SB(unsigned, loop_idx);
 
 static value_t init_key = 0x0001; // seeds the pseudo-random sequence of keys
 
@@ -99,6 +117,14 @@ static fingerprint_t hash_to_fingerprint(value_t key)
 }
 
 void task_init()
+{
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GV(loop_idx) = 0;
+	TRANSITION_TO(task_init_loop);
+}
+
+void task_init_loop()
 {
 	unsigned i;
 	for (i = 0; i < NUM_BUCKETS ; ++i) {
@@ -358,7 +384,15 @@ void task_done()
 //	if(count == 5){
 //		count = 0;
 //	}
-	TRANSITION_TO(task_init);
+	GV(loop_idx)++;
+	if (GV(loop_idx) < 5) {
+		TRANSITION_TO(task_init_loop);
+	}
+	else {
+		GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+		GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+		TRANSITION_TO(task_init);
+	}
 }
 static void init_hw()
 {
@@ -369,6 +403,10 @@ static void init_hw()
 
 void init()
 {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 40;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+
 	// set timer for measuring time
 	//	*timer &= ~(0x0020); //set bit 5 to zero(halt!)
 	init_hw();
@@ -376,7 +414,23 @@ void init()
 	INIT_CONSOLE();
 
 	__enable_interrupt();
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 	PRINTF(".%x.\r\n", curctx->task);
 }
 

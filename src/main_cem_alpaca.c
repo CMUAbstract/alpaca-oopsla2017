@@ -6,7 +6,14 @@
 #include <libwispbase/wisp-base.h>
 #include <libalpaca/alpaca.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -32,6 +39,7 @@
 __attribute__((interrupt(51))) 
 	void TimerB1_ISR(void){
 		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
 	}
 __attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
 void(*__vector_timer0_b1)(void) = TimerB1_ISR;
@@ -86,14 +94,31 @@ static void init_hw()
 
 void init()
 {
-//	BITSET(TBCCTL1 , CCIE);
-//	TBCCR1 = 20;
-//	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 40;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
 
 	init_hw();
 
 	INIT_CONSOLE();
 	__enable_interrupt();
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 	PRINTF(".%x.\r\n", curctx->task);
 }
 
@@ -105,6 +130,8 @@ static sample_t acquire_sample(letter_t prev_sample)
 
 void task_init()
 {
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
 	LOG("init\r\n");
 	GV(parent_next) = 0;
 	LOG("init: start parent %u\r\n", GV(parent));
@@ -344,6 +371,8 @@ void task_print()
 	//BLOCK_PRINTF("rate: samples/block: %u/%u\r\n", GV(sample_count), BLOCK_SIZE);
 	//BLOCK_PRINTF_END();
 	PRINTF("%u/%u\r\n", GV(sample_count), BLOCK_SIZE);
+	GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 	TRANSITION_TO(task_done); 
 }
 

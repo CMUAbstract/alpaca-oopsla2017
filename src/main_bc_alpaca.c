@@ -1,7 +1,15 @@
 #include <msp430.h>
 #include <stdlib.h>
 
+#include <libwispbase/wisp-base.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libalpaca/alpaca.h>
 #include <libmspbuiltins/builtins.h>
 #include <libmsp/mem.h>
@@ -22,7 +30,15 @@
 #define ITER 100
 #define CHAR_BIT 8
 
-__nv static char bits[256] =
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
+
+__nv static char bc_bits[256] =
 {
 	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,  /* 0   - 15  */
 	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,  /* 16  - 31  */
@@ -73,15 +89,38 @@ static void init_hw()
 }
 
 void init() {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 40;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+
 	init_hw();
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 	PRINTF(".%x.\r\n", curctx->task);
 }
 
 void task_init() {
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
 	LOG("init\r\n");
 
 	GV(func) = 0;
@@ -173,7 +212,7 @@ void task_bitcount() {
 	}
 }
 int recursive_cnt(uint32_t x){
-	int cnt = bits[(int)(x & 0x0000000FL)];
+	int cnt = bc_bits[(int)(x & 0x0000000FL)];
 
 	if (0L != (x >>= 4))
 		cnt += recursive_cnt(x);
@@ -195,14 +234,14 @@ void task_ntbl_bitcnt() {
 }
 void task_ntbl_bitcount() {
 	LOG("ntbl_bitcount\r\n");
-	GV(n_3) += bits[ (int) (GV(seed) & 0x0000000FUL)       ] +
-		bits[ (int)((GV(seed) & 0x000000F0UL) >> 4) ] +
-		bits[ (int)((GV(seed) & 0x00000F00UL) >> 8) ] +
-		bits[ (int)((GV(seed) & 0x0000F000UL) >> 12)] +
-		bits[ (int)((GV(seed) & 0x000F0000UL) >> 16)] +
-		bits[ (int)((GV(seed) & 0x00F00000UL) >> 20)] +
-		bits[ (int)((GV(seed) & 0x0F000000UL) >> 24)] +
-		bits[ (int)((GV(seed) & 0xF0000000UL) >> 28)];
+	GV(n_3) += bc_bits[ (int) (GV(seed) & 0x0000000FUL)       ] +
+		bc_bits[ (int)((GV(seed) & 0x000000F0UL) >> 4) ] +
+		bc_bits[ (int)((GV(seed) & 0x00000F00UL) >> 8) ] +
+		bc_bits[ (int)((GV(seed) & 0x0000F000UL) >> 12)] +
+		bc_bits[ (int)((GV(seed) & 0x000F0000UL) >> 16)] +
+		bc_bits[ (int)((GV(seed) & 0x00F00000UL) >> 20)] +
+		bc_bits[ (int)((GV(seed) & 0x0F000000UL) >> 24)] +
+		bc_bits[ (int)((GV(seed) & 0xF0000000UL) >> 28)];
 	GV(seed) = GV(seed) + 13;
 	GV(iter)++;
 
@@ -223,8 +262,8 @@ void task_BW_btbl_bitcount() {
 
 	U.y = GV(seed); 
 
-	GV(n_4) += bits[ U.ch[0] ] + bits[ U.ch[1] ] + 
-		bits[ U.ch[3] ] + bits[ U.ch[2] ]; 
+	GV(n_4) += bc_bits[ U.ch[0] ] + bc_bits[ U.ch[1] ] + 
+		bc_bits[ U.ch[3] ] + bc_bits[ U.ch[2] ]; 
 	GV(seed) = GV(seed) + 13;
 	GV(iter)++;
 
@@ -240,10 +279,10 @@ void task_AR_btbl_bitcount() {
 	unsigned char * Ptr = (unsigned char *) &GV(seed) ;
 	int Accu ;
 
-	Accu  = bits[ *Ptr++ ];
-	Accu += bits[ *Ptr++ ];
-	Accu += bits[ *Ptr++ ];
-	Accu += bits[ *Ptr ];
+	Accu  = bc_bits[ *Ptr++ ];
+	Accu += bc_bits[ *Ptr++ ];
+	Accu += bc_bits[ *Ptr++ ];
+	Accu += bc_bits[ *Ptr ];
 	GV(n_5)+= Accu;
 	GV(seed) = GV(seed) + 13;
 	GV(iter)++;
@@ -275,6 +314,8 @@ void task_bit_shifter() {
 }
 
 void task_end() {
+	GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 	LOG("end\r\n");
 	PRINTF("%u\r\n", GV(n_0));
 	PRINTF("%u\r\n", GV(n_1));

@@ -1,4 +1,5 @@
 #include <msp430.h>
+#include <libwispbase/wisp-base.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -6,7 +7,14 @@
 #include <stdlib.h>
 
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -28,6 +36,13 @@
 #include "pins.h"
 #define LENGTH 13
 
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 static __nv unsigned curtask;
 
 /* This is for progress reporting only */
@@ -372,44 +387,39 @@ void print_long(uint32_t l) {
 #endif
 void init()
 {
-#ifdef BOARD_MSP_TS430
-	TBCTL &= 0xE6FF; //set 12,11 bit to zero (16bit) also 8 to zero (SMCLK)
-	TBCTL |= 0x0200; //set 9 to one (SMCLK)
-	TBCTL |= 0x00C0; //set 7-6 bit to 11 (divider = 8);
-	TBCTL &= 0xFFEF; //set bit 4 to zero
-	TBCTL |= 0x0020; //set bit 5 to one (5-4=10: continuous mode)
-	TBCTL |= 0x0002; //interrupt enable
-#endif
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
     //WISP_init();
 	init_hw();
-#ifdef CONFIG_EDB
-   // debug_setup();
-    edb_init();
-#endif
 
     INIT_CONSOLE();
 
     __enable_interrupt();
-#if 0
-    GPIO(PORT_LED_1, DIR) |= BIT(PIN_LED_1);
-    GPIO(PORT_LED_2, DIR) |= BIT(PIN_LED_2);
-#if defined(PORT_LED_3)
-    GPIO(PORT_LED_3, DIR) |= BIT(PIN_LED_3);
-#endif
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 
-#if defined(PORT_LED_3) // when available, this LED indicates power-on
-    GPIO(PORT_LED_3, OUT) |= BIT(PIN_LED_3);
-#endif
-
-#ifdef SHOW_PROGRESS_ON_LED
-    blink(1, SEC_TO_CYCLES * 5, LED1 | LED2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
 #endif
 #endif
     EIF_PRINTF(".%u.\r\n", curtask);
 }
 void BF_encrypt(uint32_t *data, uint32_t *key){
+	setGPIO();
         TASK_BOUNDARY(TASK_ENCRYPT);
         DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 	uint32_t l, r, p, s0_t, s1_t, s2_t, s3_t, tmp;
 	r = data[0];
 	l = data[1];
@@ -440,15 +450,19 @@ void BF_encrypt(uint32_t *data, uint32_t *key){
 	data[1] = r;
 	data[0] = l;
 	//CHECKPOINT
+	setGPIO();
         TASK_BOUNDARY(TASK_ENCRYPT_END);
         DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 void BF_set_key(unsigned char *data, uint32_t *key){
 	unsigned i;
 	uint32_t ri, ri2;
 	unsigned d = 0;
+	setGPIO();
         TASK_BOUNDARY(TASK_INIT_S);
         DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 	for (i=0; i<18; ++i){
 		ri= data[d++];
 
@@ -471,8 +485,10 @@ void BF_set_key(unsigned char *data, uint32_t *key){
 
 		key[i]^=ri;
 	}
+	setGPIO();
         TASK_BOUNDARY(TASK_SET_KEY);
         DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 	uint32_t in[2]={0L,0L};
 	BF_encrypt(in, key);
 	uint32_t li;
@@ -547,8 +563,10 @@ void BF_cfb64_encrypt(unsigned char* out, unsigned char* iv, uint32_t *key){
 	unsigned char c;
 	unsigned n = 0;
 	for (unsigned i=0; i< LENGTH; ++i){
+	setGPIO();
 		TASK_BOUNDARY(TASK_START_ENCRYPT);
 		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 		if (n == 0){
 			for (unsigned j=0; j<8; ++j){
 				LOG("before: iv[%u]=%u\r\n",j,iv[j]);
@@ -577,8 +595,10 @@ void BF_cfb64_encrypt(unsigned char* out, unsigned char* iv, uint32_t *key){
 			}	
 #endif
 		}
+	setGPIO();
 		TASK_BOUNDARY(TASK_START_ENCRYPT2);
 		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 		c= indata[i]^iv[n];
 		out[i]=c;
 		PRINTF("result: %x\r\n", c);
@@ -598,51 +618,61 @@ int main()
 	unsigned char ukey[16];
 	unsigned char indata[40], outdata[40], ivec[8];
 
-	while(1){
-	unsigned i = 0, by = 0;	
+	while(1) {
+		GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+		GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+		unsigned i = 0, by = 0;	
 
-	for (i = 0; i < 8; ++i){
-		ivec[i] = 0;
-	}
-	i = 0;
-	//CHECKPOINT
-        TASK_BOUNDARY(TASK_INIT);
-        DINO_MANUAL_RESTORE_NONE();
-	while (i < 32) {
-		if(cp[i] >= '0' && cp[i] <= '9')
-			by = (by << 4) + cp[i] - '0';
-		else if(cp[i] >= 'A' && cp[i] <= 'F') //currently, key should be 0-9 or A-F
-			by = (by << 4) + cp[i] - 'A' + 10;
-		else
-			PRINTF("Key must be hexadecimal!!\r\n");
-		if ((i++) & 1) {
-			ukey[i/2-1] = by & 0xff;
-			LOG("ukey[%u]: %u\r\n",i/2-1,by & 0xff);
+		for (i = 0; i < 8; ++i){
+			ivec[i] = 0;
 		}
+		i = 0;
+		//CHECKPOINT
+	setGPIO();
+		TASK_BOUNDARY(TASK_INIT);
+		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+		while (i < 32) {
+			if(cp[i] >= '0' && cp[i] <= '9')
+				by = (by << 4) + cp[i] - '0';
+			else if(cp[i] >= 'A' && cp[i] <= 'F') //currently, key should be 0-9 or A-F
+				by = (by << 4) + cp[i] - 'A' + 10;
+			else
+				PRINTF("Key must be hexadecimal!!\r\n");
+			if ((i++) & 1) {
+				ukey[i/2-1] = by & 0xff;
+				LOG("ukey[%u]: %u\r\n",i/2-1,by & 0xff);
+			}
 
-	}
-        TASK_BOUNDARY(TASK_SET_UKEY);
-        DINO_MANUAL_RESTORE_NONE();
-	for (i = 0; i < 18; ++i)
-		key[i] = init_key[i];
-	
-	for (i = 0; i < 1024; ++i) {
-		if (i == 0 || i == 256 || i == 256*2 || i == 256*3){
-			TASK_BOUNDARY(TASK_INIT_KEY);
-			DINO_MANUAL_RESTORE_NONE();
 		}
-		if (i < 256) 
-			s0[i] = init_s0[i];
-		else if (i < 256*2)
-			s1[i-256] = init_s1[i-256];
-		else if (i < 256*3)
-			s2[i-256*2] = init_s2[i-256*2];
-		else 
-			s3[i-256*3] = init_s3[i-256*3];
+	setGPIO();
+		TASK_BOUNDARY(TASK_SET_UKEY);
+		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+		for (i = 0; i < 18; ++i)
+			key[i] = init_key[i];
+
+		for (i = 0; i < 1024; ++i) {
+			if (i == 0 || i == 256 || i == 256*2 || i == 256*3){
+	setGPIO();
+				TASK_BOUNDARY(TASK_INIT_KEY);
+				DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+			}
+			if (i < 256) 
+				s0[i] = init_s0[i];
+			else if (i < 256*2)
+				s1[i-256] = init_s1[i-256];
+			else if (i < 256*3)
+				s2[i-256*2] = init_s2[i-256*2];
+			else 
+				s3[i-256*3] = init_s3[i-256*3];
+		}
+		BF_set_key(ukey, key);
+		BF_cfb64_encrypt(outdata, ivec, key);
+		GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+		GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 	}
-	BF_set_key(ukey, key);
-	BF_cfb64_encrypt(outdata, ivec, key);
-}
 }
 
 

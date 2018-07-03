@@ -1,4 +1,5 @@
 #include <msp430.h>
+#include <libwispbase/wisp-base.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -6,7 +7,14 @@
 #include <stdlib.h>
 
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -25,10 +33,17 @@
 #include <libdino/dino.h>
 #endif
 
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 #define SEED 4L
 #define ITER 100
 #define CHAR_BIT 8
-static char bits[256] =
+static char bc_bits[256] =
 {
       0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,  /* 0   - 15  */
       1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,  /* 16  - 31  */
@@ -158,18 +173,39 @@ static void init_hw()
 
 void init()
 {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
 	init_hw();
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 	EIF_PRINTF(".%u.\r\n", curtask);
 }
 
 
 int btbl_bitcnt(uint32_t x)
 {
-      int cnt = bits[ ((char *)&x)[0] & 0xFF ];
+      int cnt = bc_bits[ ((char *)&x)[0] & 0xFF ];
 
       if (0L != (x >>= 8))
             cnt += btbl_bitcnt(x);
@@ -199,14 +235,14 @@ int bitcount(uint32_t i)
 int ntbl_bitcount(uint32_t x)
 {
       return
-            bits[ (int) (x & 0x0000000FUL)       ] +
-            bits[ (int)((x & 0x000000F0UL) >> 4) ] +
-            bits[ (int)((x & 0x00000F00UL) >> 8) ] +
-            bits[ (int)((x & 0x0000F000UL) >> 12)] +
-            bits[ (int)((x & 0x000F0000UL) >> 16)] +
-            bits[ (int)((x & 0x00F00000UL) >> 20)] +
-            bits[ (int)((x & 0x0F000000UL) >> 24)] +
-            bits[ (int)((x & 0xF0000000UL) >> 28)];
+            bc_bits[ (int) (x & 0x0000000FUL)       ] +
+            bc_bits[ (int)((x & 0x000000F0UL) >> 4) ] +
+            bc_bits[ (int)((x & 0x00000F00UL) >> 8) ] +
+            bc_bits[ (int)((x & 0x0000F000UL) >> 12)] +
+            bc_bits[ (int)((x & 0x000F0000UL) >> 16)] +
+            bc_bits[ (int)((x & 0x00F00000UL) >> 20)] +
+            bc_bits[ (int)((x & 0x0F000000UL) >> 24)] +
+            bc_bits[ (int)((x & 0xF0000000UL) >> 28)];
 }
 int BW_btbl_bitcount(uint32_t x)
 {
@@ -218,23 +254,23 @@ int BW_btbl_bitcount(uint32_t x)
  
       U.y = x; 
  
-      return bits[ U.ch[0] ] + bits[ U.ch[1] ] + 
-             bits[ U.ch[3] ] + bits[ U.ch[2] ]; 
+      return bc_bits[ U.ch[0] ] + bc_bits[ U.ch[1] ] + 
+             bc_bits[ U.ch[3] ] + bc_bits[ U.ch[2] ]; 
 }
 int AR_btbl_bitcount(uint32_t x)
 {
       unsigned char * Ptr = (unsigned char *) &x ;
       int Accu ;
 
-      Accu  = bits[ *Ptr++ ];
-      Accu += bits[ *Ptr++ ];
-      Accu += bits[ *Ptr++ ];
-      Accu += bits[ *Ptr ];
+      Accu  = bc_bits[ *Ptr++ ];
+      Accu += bc_bits[ *Ptr++ ];
+      Accu += bc_bits[ *Ptr++ ];
+      Accu += bc_bits[ *Ptr ];
       return Accu;
 }
 int ntbl_bitcnt(uint32_t x)
 {
-      int cnt = bits[(int)(x & 0x0000000FL)];
+      int cnt = bc_bits[(int)(x & 0x0000000FL)];
 
       if (0L != (x >>= 4))
             cnt += ntbl_bitcnt(x);
@@ -251,92 +287,116 @@ static int bit_shifter(uint32_t x)
 }
 int main()
 {
-init();
+	init();
 
-DINO_RESTORE_CHECK();
-//	while(true){
+	DINO_RESTORE_CHECK();
+	//	while(true){
 	unsigned n_0, n_1, n_2, n_3, n_4, n_5, n_6;
 	uint32_t seed;
 	unsigned iter;
 	unsigned func;
 
 	while(1) {
-	n_0=0;
-	n_1=0;
-	n_2=0;
-	n_3=0;
-	n_4=0;
-	n_5=0;
-	n_6=0;
+		GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+		GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+		n_0=0;
+		n_1=0;
+		n_2=0;
+		n_3=0;
+		n_4=0;
+		n_5=0;
+		n_6=0;
 
-	TASK_BOUNDARY(TASK_INIT, NULL);
-	DINO_MANUAL_RESTORE_NONE();
-
-	for (func = 0; func < 7; func++) {
-		TASK_BOUNDARY(TASK_SELECT_FUNC, NULL);
+	setGPIO();
+		TASK_BOUNDARY(TASK_INIT, NULL);
 		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
-		seed = (uint32_t)SEED;
-		if(func == 0){
-			for(iter = 0; iter < ITER; ++iter, seed += 13){
-				TASK_BOUNDARY(TASK_B0, NULL);
-				DINO_MANUAL_RESTORE_NONE();
-				n_0 += bit_count(seed);
-			}
-		}
-		else if(func == 1){
-			for(iter = 0; iter < ITER; ++iter, seed += 13){
-				TASK_BOUNDARY(TASK_B1, NULL);
-				DINO_MANUAL_RESTORE_NONE();
-				n_1 += bitcount(seed);
-			}
-		}
-		else if(func == 2){
-			for(iter = 0; iter < ITER; ++iter, seed += 13){
-				TASK_BOUNDARY(TASK_B2, NULL);
-				DINO_MANUAL_RESTORE_NONE();
-				n_2 += ntbl_bitcnt(seed);
-			}
-		}
-		else if(func == 3){
-			for(iter = 0; iter < ITER; ++iter, seed += 13){
-				TASK_BOUNDARY(TASK_B3, NULL);
-				DINO_MANUAL_RESTORE_NONE();
-				n_3 += ntbl_bitcount(seed);
-			}
-		}
-		else if(func == 4){
-			for(iter = 0; iter < ITER; ++iter, seed += 13){
-				TASK_BOUNDARY(TASK_B4, NULL);
-				DINO_MANUAL_RESTORE_NONE();
-				n_4 += BW_btbl_bitcount(seed);
-			}
-		}
-		else if(func == 5){
-			for(iter = 0; iter < ITER; ++iter, seed += 13){
-				TASK_BOUNDARY(TASK_B5, NULL);
-				DINO_MANUAL_RESTORE_NONE();
-				n_5 += AR_btbl_bitcount(seed);
-			}
-		}
-		else if(func == 6){
-			for(iter = 0; iter < ITER; ++iter, seed += 13){
-				TASK_BOUNDARY(TASK_B6, NULL);
-				DINO_MANUAL_RESTORE_NONE();
-				n_6 += bit_shifter(seed);
-			}
-		}
-	}
-	TASK_BOUNDARY(TASK_END, NULL);
-	DINO_MANUAL_RESTORE_NONE();
+		for (func = 0; func < 7; func++) {
+	setGPIO();
+			TASK_BOUNDARY(TASK_SELECT_FUNC, NULL);
+			DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
-	PRINTF("%u\r\n", n_0);
-	PRINTF("%u\r\n", n_1);
-	PRINTF("%u\r\n", n_2);
-	PRINTF("%u\r\n", n_3);
-	PRINTF("%u\r\n", n_4);
-	PRINTF("%u\r\n", n_5);
-	PRINTF("%u\r\n", n_6);
+			seed = (uint32_t)SEED;
+			if(func == 0){
+				for(iter = 0; iter < ITER; ++iter, seed += 13){
+	setGPIO();
+					TASK_BOUNDARY(TASK_B0, NULL);
+					DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+					n_0 += bit_count(seed);
+				}
+			}
+			else if(func == 1){
+				for(iter = 0; iter < ITER; ++iter, seed += 13){
+	setGPIO();
+					TASK_BOUNDARY(TASK_B1, NULL);
+					DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+					n_1 += bitcount(seed);
+				}
+			}
+			else if(func == 2){
+				for(iter = 0; iter < ITER; ++iter, seed += 13){
+	setGPIO();
+					TASK_BOUNDARY(TASK_B2, NULL);
+					DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+					n_2 += ntbl_bitcnt(seed);
+				}
+			}
+			else if(func == 3){
+				for(iter = 0; iter < ITER; ++iter, seed += 13){
+	setGPIO();
+					TASK_BOUNDARY(TASK_B3, NULL);
+					DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+					n_3 += ntbl_bitcount(seed);
+				}
+			}
+			else if(func == 4){
+				for(iter = 0; iter < ITER; ++iter, seed += 13){
+	setGPIO();
+					TASK_BOUNDARY(TASK_B4, NULL);
+					DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+					n_4 += BW_btbl_bitcount(seed);
+				}
+			}
+			else if(func == 5){
+				for(iter = 0; iter < ITER; ++iter, seed += 13){
+	setGPIO();
+					TASK_BOUNDARY(TASK_B5, NULL);
+					DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+					n_5 += AR_btbl_bitcount(seed);
+				}
+			}
+			else if(func == 6){
+				for(iter = 0; iter < ITER; ++iter, seed += 13){
+	setGPIO();
+					TASK_BOUNDARY(TASK_B6, NULL);
+					DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+					n_6 += bit_shifter(seed);
+				}
+			}
+		}
+	setGPIO();
+		TASK_BOUNDARY(TASK_END, NULL);
+		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+
+		PRINTF("%u\r\n", n_0);
+		PRINTF("%u\r\n", n_1);
+		PRINTF("%u\r\n", n_2);
+		PRINTF("%u\r\n", n_3);
+		PRINTF("%u\r\n", n_4);
+		PRINTF("%u\r\n", n_5);
+		PRINTF("%u\r\n", n_6);
+		GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+		GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 	}
 	return 0;
 }

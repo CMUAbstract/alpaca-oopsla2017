@@ -1,4 +1,5 @@
 #include <msp430.h>
+#include <libwispbase/wisp-base.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -6,7 +7,15 @@
 #include <stdlib.h>
 
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define LOG2(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -32,6 +41,13 @@
 // #define SHOW_PROGRESS_ON_LED
 // #define BLOCK_DELAY
 
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 /* This is for progress reporting only */
 #define SET_CURTASK(t) curtask = t
@@ -218,39 +234,39 @@ static __nv unsigned CYPHERTEXT_LEN = 0;
 //static __nv bigint_t product;
 #endif
 
-void print_bigint(const bigint_t n, unsigned digits)
-{
-    int i;
-    for (i = digits - 1; i >= 0; --i)
-        PRINTF("%02x ", n[i]);
-}
+//void print_bigint(const bigint_t n, unsigned digits)
+//{
+//    int i;
+//    for (i = digits - 1; i >= 0; --i)
+//        PRINTF("%02x ", n[i]);
+//}
+//
+//void log_bigint(const bigint_t n, unsigned digits)
+//{
+//    int i;
+//    for (i = digits - 1; i >= 0; --i)
+//        BLOCK_LOG("%02x ", n[i]);
+//}
 
-void log_bigint(const bigint_t n, unsigned digits)
-{
-    int i;
-    for (i = digits - 1; i >= 0; --i)
-        BLOCK_LOG("%02x ", n[i]);
-}
-
-void print_hex_ascii(const uint8_t *m, unsigned len)
-{
-    int i, j;
-   
-    for (i = 0; i < len; i += PRINT_HEX_ASCII_COLS) {
-        for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j)
-            BLOCK_PRINTF("%02x ", m[i + j]);
-        for (; j < PRINT_HEX_ASCII_COLS; ++j)
-            BLOCK_PRINTF("   ");
-        BLOCK_PRINTF(" ");
-        for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j) {
-            char c = m[i + j];
-            if (!(32 <= c && c <= 127)) // not printable
-                c = '.';
-            BLOCK_PRINTF("%c", c);
-        }
-        BLOCK_PRINTF("\r\n");
-    }
-}
+//void print_hex_ascii(const uint8_t *m, unsigned len)
+//{
+//    int i, j;
+//   
+//    for (i = 0; i < len; i += PRINT_HEX_ASCII_COLS) {
+//        for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j)
+//            BLOCK_PRINTF("%02x ", m[i + j]);
+//        for (; j < PRINT_HEX_ASCII_COLS; ++j)
+//            BLOCK_PRINTF("   ");
+//        BLOCK_PRINTF(" ");
+//        for (j = 0; j < PRINT_HEX_ASCII_COLS && i + j < len; ++j) {
+//            char c = m[i + j];
+//            if (!(32 <= c && c <= 127)) // not printable
+//                c = '.';
+//            BLOCK_PRINTF("%c", c);
+//        }
+//        BLOCK_PRINTF("\r\n");
+//    }
+//}
 
 void mult(bigint_t a, bigint_t b, bigint_t product)
 {
@@ -259,8 +275,10 @@ void mult(bigint_t a, bigint_t b, bigint_t product)
     digit_t p, c, dp;
     digit_t carry = 0;
 
+	setGPIO();
     TASK_BOUNDARY(MULT_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 //    BLOCK_LOG_BEGIN();
 //    BLOCK_LOG("mult: a = "); log_bigint(a, NUM_DIGITS); BLOCK_LOG("\r\n");
@@ -270,8 +288,10 @@ void mult(bigint_t a, bigint_t b, bigint_t product)
     for (digit = 0; digit < NUM_DIGITS * 2; ++digit) {
         LOG2("mult: d=%u\r\n", digit);
 
+	setGPIO();
         TASK_BOUNDARY(MULT_DIGIT_LOOP_TASK, NULL);
         DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
         p = carry;
         c = 0;
@@ -293,8 +313,10 @@ void mult(bigint_t a, bigint_t b, bigint_t product)
         carry = c;
     }
 
+	setGPIO();
     TASK_BOUNDARY(MULT_DONE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 
 bool reduce_normalizable(bigint_t m, const bigint_t n, unsigned d)
@@ -304,8 +326,10 @@ bool reduce_normalizable(bigint_t m, const bigint_t n, unsigned d)
     digit_t n_d, m_d;
     bool normalizable = true;
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_NORMALIZABLE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
     offset = d + 1 - NUM_DIGITS; // TODO: can this go below zero
     LOG("reduce: normalizable: d=%u offset=%u\r\n", d, offset);
@@ -326,8 +350,10 @@ bool reduce_normalizable(bigint_t m, const bigint_t n, unsigned d)
 
     LOG("normalizable: %u\r\n", normalizable);
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_NORMALIZABLE_DONE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
     return normalizable;
 }
@@ -338,16 +364,20 @@ void reduce_normalize(bigint_t m, const bigint_t n, unsigned digit)
     digit_t d, s, m_d, n_d;
     unsigned borrow, offset;
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_NORMALIZE_TASK, NULL);
+	unsetGPIO();
 
     offset = digit + 1 - NUM_DIGITS; // TODO: can this go below zero
 
     borrow = 0;
     for (i = 0; i < NUM_DIGITS; ++i) {
 
+	setGPIO();
         DINO_MANUAL_VERSION_VAL(digit_t, m[i + offset], m_d);
         TASK_BOUNDARY(REDUCE_NORMALIZE_LOOP_TASK, NULL);
         DINO_MANUAL_RESTORE_VAL(m[i + offset], m_d);
+	unsetGPIO();
 
         m_d = m[i + offset];
         n_d = n[i];
@@ -367,8 +397,10 @@ void reduce_normalize(bigint_t m, const bigint_t n, unsigned digit)
         m[i + offset] = d;
     }
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_NORMALIZE_DONE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 
 void reduce_quotient(digit_t *quotient, bigint_t m, const bigint_t n, unsigned d)
@@ -378,8 +410,10 @@ void reduce_quotient(digit_t *quotient, bigint_t m, const bigint_t n, unsigned d
     uint32_t n_q, qn;
     uint16_t m_dividend;
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_QUOTIENT_1_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
     // Divisor, derived from modulus, for refining quotient guess into exact value
     n_div = ((n[NUM_DIGITS - 1] << DIGIT_BITS) + n[NUM_DIGITS - 2]);
@@ -392,8 +426,10 @@ void reduce_quotient(digit_t *quotient, bigint_t m, const bigint_t n, unsigned d
 
     LOG("reduce: quotient: n_n=%x m[d]=%x\r\n", n_n, m[2]);
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_QUOTIENT_2_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
     // Choose an initial guess for quotient
     if (m_d[2] == n_n) {
@@ -405,8 +441,10 @@ void reduce_quotient(digit_t *quotient, bigint_t m, const bigint_t n, unsigned d
         LOG("reduce quotient: m_dividend=%x q=%x\r\n", m_dividend, q);
     }
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_QUOTIENT_3_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
     // Refine quotient guess
 
@@ -423,8 +461,10 @@ void reduce_quotient(digit_t *quotient, bigint_t m, const bigint_t n, unsigned d
 
     q++;
     do {
+	setGPIO();
         TASK_BOUNDARY(REDUCE_QUOTIENT_4_TASK, NULL);
         DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
         q--;
         // NOTE: yes, this result can be >16-bit because:
@@ -453,8 +493,10 @@ void reduce_quotient(digit_t *quotient, bigint_t m, const bigint_t n, unsigned d
 
     *quotient = q;
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_QUOTIENT_DONE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 
 void reduce_multiply(bigint_t product, digit_t q, const bigint_t n, unsigned d)
@@ -463,8 +505,10 @@ void reduce_multiply(bigint_t product, digit_t q, const bigint_t n, unsigned d)
     unsigned offset, c;
     digit_t p, nd;
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_MULTIPLY_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
     // TODO: factor out shift outside of this task
     // As part of this task, we also perform the left-shifting of the q*m
@@ -481,8 +525,10 @@ void reduce_multiply(bigint_t product, digit_t q, const bigint_t n, unsigned d)
     c = 0;
     for (i = offset; i < 2 * NUM_DIGITS; ++i) {
 
+	setGPIO();
         TASK_BOUNDARY(REDUCE_MULTIPLY_LOOP_TASK, NULL);
         DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
         // This condition creates the left-shifted zeros.
         // TODO: consider adding number of digits to go along with the 'product' field,
@@ -511,8 +557,10 @@ void reduce_multiply(bigint_t product, digit_t q, const bigint_t n, unsigned d)
 //    BLOCK_LOG("\r\n");
 //    BLOCK_LOG_END();
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_MULTIPLY_DONE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 
 int reduce_compare(bigint_t a, bigint_t b)
@@ -520,8 +568,10 @@ int reduce_compare(bigint_t a, bigint_t b)
     int i;
     int relation = 0;
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_COMPARE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
     for (i = NUM_DIGITS * 2 - 1; i >= 0; --i) {
         if (a > b) {
@@ -533,8 +583,10 @@ int reduce_compare(bigint_t a, bigint_t b)
         }
     }
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_COMPARE_DONE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
     return relation;
 }
 
@@ -544,8 +596,10 @@ void reduce_add(bigint_t a, const bigint_t b, unsigned d)
     unsigned offset, c;
     digit_t r, m, n;
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_ADD_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
     // TODO: factor out shift outside of this task
     // Part of this task is to shift modulus by radix^(digit - NUM_DIGITS)
@@ -554,9 +608,11 @@ void reduce_add(bigint_t a, const bigint_t b, unsigned d)
     c = 0;
     for (i = offset; i < 2 * NUM_DIGITS; ++i) {
 
+	setGPIO();
         DINO_MANUAL_VERSION_VAL(digit_t, a[i], a_i);
         TASK_BOUNDARY(REDUCE_ADD_LOOP_TASK, NULL);
         DINO_MANUAL_RESTORE_VAL(a[i], a_i);
+	unsetGPIO();
 
         m = a[i];
 
@@ -587,8 +643,10 @@ void reduce_add(bigint_t a, const bigint_t b, unsigned d)
 //   BLOCK_LOG("\r\n");
 //    BLOCK_LOG_END();
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_ADD_DONE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 
 void reduce_subtract(bigint_t a, bigint_t b, unsigned d)
@@ -597,8 +655,10 @@ void reduce_subtract(bigint_t a, bigint_t b, unsigned d)
     digit_t m, s, r, qn;
     unsigned borrow, offset;
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_SUBTRACT_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
     // TODO: factor out shifting logic from this task
     // The qn product had been shifted by this offset, no need to subtract the zeros
@@ -608,9 +668,11 @@ void reduce_subtract(bigint_t a, bigint_t b, unsigned d)
 
     borrow = 0;
     for (i = offset; i < 2 * NUM_DIGITS; ++i) {
+	setGPIO();
         DINO_MANUAL_VERSION_VAL(digit_t, a[i], a_i);
         TASK_BOUNDARY(REDUCE_SUBTRACT_LOOP_TASK, NULL);
         DINO_MANUAL_RESTORE_VAL(a[i], a_i);
+	unsetGPIO();
 
         m = a[i];
 
@@ -637,8 +699,10 @@ void reduce_subtract(bigint_t a, bigint_t b, unsigned d)
 //    BLOCK_LOG("\r\n");
 //    BLOCK_LOG_END();
 
+	setGPIO();
     TASK_BOUNDARY(REDUCE_SUBTRACT_DONE_TASK, NULL);
     DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 
 void reduce(bigint_t m, const bigint_t n)
@@ -647,8 +711,10 @@ void reduce(bigint_t m, const bigint_t n)
 	unsigned d;
 	bigint_t qxn;
 
+	setGPIO();
 	TASK_BOUNDARY(REDUCE_TASK, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	// Start reduction loop at most significant non-zero digit
 	d = 2 * NUM_DIGITS;
@@ -682,8 +748,10 @@ void reduce(bigint_t m, const bigint_t n)
 	//    BLOCK_LOG("\r\n");
 	//    BLOCK_LOG_END();
 
+	setGPIO();
 	TASK_BOUNDARY(REDUCE_DONE_TASK, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 
 void mod_mult(bigint_t a, bigint_t b, const bigint_t n, bigint_t product)
@@ -697,8 +765,10 @@ void mod_exp(bigint_t out_block, bigint_t base, digit_t e, const bigint_t n)
 	bigint_t product;
 	int i;
 
+	setGPIO();
 	TASK_BOUNDARY(MOD_EXP_TASK, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	// Result initialized to 1
 	out_block[0] = 0x1;
@@ -706,8 +776,10 @@ void mod_exp(bigint_t out_block, bigint_t base, digit_t e, const bigint_t n)
 		out_block[i] = 0x0;
 
 	while (e > 0) {
+	setGPIO();
 		TASK_BOUNDARY(MOD_EXP_LOOP_TASK, NULL);
 		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 		LOG("mod exp: e=%x\r\n", e);
 		if (e & 0x1) {
@@ -733,8 +805,10 @@ void mod_exp(bigint_t out_block, bigint_t base, digit_t e, const bigint_t n)
 		}
 	}
 
+	setGPIO();
 	TASK_BOUNDARY(MOD_EXP_DONE_TASK, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 void encrypt(uint8_t *cyphertext, unsigned *cyphertext_len,
 		const uint8_t *message, unsigned message_length,
@@ -749,8 +823,10 @@ void encrypt(uint8_t *cyphertext, unsigned *cyphertext_len,
 	out_block_offset = 0;
 	while (in_block_offset < message_length) {
 
+	setGPIO();
 		TASK_BOUNDARY(ENCRYPT_TASK, NULL);
 		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 		LOG("Blk offset: %u\r\n", in_block_offset);
 
@@ -784,8 +860,10 @@ void encrypt(uint8_t *cyphertext, unsigned *cyphertext_len,
 
 	*cyphertext_len = out_block_offset;
 
+	setGPIO();
 	TASK_BOUNDARY(ENCRYPT_DONE_TASK, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 }
 static void init_hw()
 {
@@ -796,24 +874,30 @@ static void init_hw()
 
 void init()
 {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
 	init_hw();
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
-#if 0
-	GPIO(PORT_LED_1, DIR) |= BIT(PIN_LED_1);
-	GPIO(PORT_LED_2, DIR) |= BIT(PIN_LED_2);
-#if defined(PORT_LED_3)
-	GPIO(PORT_LED_3, DIR) |= BIT(PIN_LED_3);
-#endif
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 
-#if defined(PORT_LED_3) // when available, this LED indicates power-on
-	GPIO(PORT_LED_3, OUT) |= BIT(PIN_LED_3);
-#endif
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
 
-#ifdef SHOW_PROGRESS_ON_LED
-	blink(1, SEC_TO_CYCLES * 5, LED1 | LED2);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
 #endif
 #endif
 	EIF_PRINTF(".%u.\r\n", curtask);
@@ -830,8 +914,12 @@ int main()
 	DINO_RESTORE_CHECK();
 
 	do {
+		GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+		GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	setGPIO();
 		TASK_BOUNDARY(PRINT_PLAINTEXT_TASK, NULL);
 		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 		message_length = sizeof(PLAINTEXT) - 1; // exclude null byte
 
@@ -844,17 +932,24 @@ int main()
 
 		encrypt(CYPHERTEXT, &CYPHERTEXT_LEN, PLAINTEXT, message_length, &pubkey);
 
+	setGPIO();
 		TASK_BOUNDARY(PRINT_CYPHERTEXT_TASK, NULL);
 		DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
-		BLOCK_PRINTF_BEGIN();
-		BLOCK_PRINTF("Cyphertext:\r\n");
-		print_hex_ascii(CYPHERTEXT, CYPHERTEXT_LEN);
-		BLOCK_PRINTF_END();
+		//BLOCK_PRINTF_BEGIN();
+		//BLOCK_PRINTF("Cyphertext:\r\n");
+		//print_hex_ascii(CYPHERTEXT, CYPHERTEXT_LEN);
+		//BLOCK_PRINTF_END();
+		GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+		GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 	} while (1);
 
+
+	setGPIO();
 	TASK_BOUNDARY(DONE_TASK, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	return 0;
 }

@@ -95,7 +95,7 @@ static void init_hw()
 void init()
 {
 	BITSET(TBCCTL1 , CCIE);
-	TBCCR1 = 40;
+	TBCCR1 = 100;
 	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
 
 	init_hw();

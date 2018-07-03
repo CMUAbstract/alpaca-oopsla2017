@@ -7,9 +7,17 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include <libwispbase/wisp-base.h>
 #include <libchain/chain.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -20,6 +28,14 @@
 #endif
 
 #include "pins.h"
+
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 #define NUM_INSERTS (NUM_BUCKETS / 4) // shoot for 25% occupancy
 #define NUM_LOOKUPS NUM_INSERTS
@@ -175,6 +191,15 @@ struct msg_self_count {
 struct msg_count {
     CHAN_FIELD(unsigned, count);
 };
+struct msg_self_loop_idx {
+    SELF_CHAN_FIELD(unsigned, loop_idx);
+};
+#define FIELD_INIT_msg_self_loop_idx {\
+    SELF_FIELD_INITIALIZER \
+}
+struct msg_loop_idx {
+    CHAN_FIELD(unsigned, loop_idx);
+};
 
 TASK(1,  task_init)
 TASK(2,  task_generate_key)
@@ -190,6 +215,7 @@ TASK(11, task_lookup_search)
 TASK(12, task_lookup_done)
 TASK(13, task_print_stats)
 TASK(14, task_done)
+TASK(99, task_init_loop)
 
 CHANNEL(task_init, task_generate_key, msg_genkey);
 CHANNEL(task_init, task_insert_done, msg_insert_count);
@@ -226,8 +252,9 @@ CHANNEL(task_insert_done, task_print_stats, msg_inserted_count);
 CHANNEL(task_lookup_done, task_print_stats, msg_member_count);
 SELF_CHANNEL(task_generate_key, msg_self_key);
 CHANNEL(task_lookup_search, task_lookup_done, msg_member);
-//SELF_CHANNEL(task_init_filter, msg_self_count);
-//CHANNEL(task_init, task_init_filter, msg_count);
+
+SELF_CHANNEL(task_done, msg_self_loop_idx);
+CHANNEL(task_init, task_done, msg_loop_idx);
 
 static value_t init_key = 0x0001; // seeds the pseudo-random sequence of keys
 
@@ -254,6 +281,15 @@ static fingerprint_t hash_to_fingerprint(value_t key)
 }
 
 void task_init()
+{
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	unsigned zero = 0;
+	CHAN_OUT1(unsigned, loop_idx, zero, CH(task_init, task_done));
+	TRANSITION_TO(task_init_loop);
+}
+
+void task_init_loop()
 {
     LOG("init\r\n");
 	unsigned i;
@@ -303,7 +339,7 @@ void task_generate_key()
     task_t *next_task = *CHAN_IN2(task_t *, next_task,
                                   CH(task_init, task_generate_key),
                                   CH(task_insert_done, task_generate_key));
-    transition_to(next_task);
+    TRANSITION_TO2(next_task);
 }
 
 void task_calc_indexes()
@@ -358,7 +394,7 @@ void task_calc_indexes_index_2()
 
     task_t *next_task = *CHAN_IN1(task_t *, next_task,
                                   CALL_CH(ch_calc_indexes));
-    transition_to(next_task);
+    TRANSITION_TO2(next_task);
 }
 
 // This task is a somewhat redundant proxy. But it will be a callable
@@ -716,7 +752,17 @@ void task_print_stats()
 
 void task_done()
 {
-    TRANSITION_TO(task_init);
+	unsigned loop_idx = *CHAN_IN2(unsigned, loop_idx, CH(task_init, task_done), SELF_CH(task_done));
+	loop_idx++;
+	if (loop_idx < 5) {
+		CHAN_OUT1(unsigned, loop_idx, loop_idx, SELF_CH(task_done));
+		TRANSITION_TO(task_init_loop);
+	}
+	else {
+		GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+		GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+		TRANSITION_TO(task_init);
+	}
 }
 static void init_hw()
 {
@@ -726,12 +772,33 @@ static void init_hw()
 }
 void init()
 {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+
 	init_hw();
 
     INIT_CONSOLE();
 
     __enable_interrupt();
 
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 
     PRINTF(".%u.\r\n", curctx->task->idx);
 }

@@ -1,4 +1,5 @@
 #include <msp430.h>
+#include <libwispbase/wisp-base.h>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -6,7 +7,14 @@
 #include <stdlib.h>
 
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -35,6 +43,13 @@
 //#define NUM_BUCKETS 64 // must be a power of 2
 #define MAX_RELOCATIONS 8
 
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 typedef uint16_t value_t;
 typedef uint16_t hash_t;
 typedef uint16_t fingerprint_t;
@@ -101,30 +116,30 @@ static void init_hw()
 	msp_gpio_unlock();
 	msp_clock_setup();
 }
-void print_filter(fingerprint_t *filter)
-{
-    unsigned i;
-	BLOCK_PRINTF_BEGIN();
-	for (i = 0; i < NUM_BUCKETS; ++i) {
-		BLOCK_PRINTF("%04x ", filter[i]);
-		if (i > 0 && (i + 1) % 8 == 0){
-			BLOCK_PRINTF("\r\n");
-		}
-	}
-	BLOCK_PRINTF_END();
-}
+//void print_filter(fingerprint_t *filter)
+//{
+//    unsigned i;
+//	BLOCK_PRINTF_BEGIN();
+//	for (i = 0; i < NUM_BUCKETS; ++i) {
+//		BLOCK_PRINTF("%04x ", filter[i]);
+//		if (i > 0 && (i + 1) % 8 == 0){
+//			BLOCK_PRINTF("\r\n");
+//		}
+//	}
+//	BLOCK_PRINTF_END();
+//}
 
-void log_filter(fingerprint_t *filter)
-{
-	unsigned i;
-	BLOCK_LOG_BEGIN();
-	for (i = 0; i < NUM_BUCKETS; ++i) {
-		BLOCK_LOG("%04x ", filter[i]);
-		if (i > 0 && (i + 1) % 8 == 0)
-			BLOCK_LOG("\r\n");
-	}
-	BLOCK_LOG_END();
-}
+//void log_filter(fingerprint_t *filter)
+//{
+//	unsigned i;
+//	BLOCK_LOG_BEGIN();
+//	for (i = 0; i < NUM_BUCKETS; ++i) {
+//		BLOCK_LOG("%04x ", filter[i]);
+//		if (i > 0 && (i + 1) % 8 == 0)
+//			BLOCK_LOG("\r\n");
+//	}
+//	BLOCK_LOG_END();
+//}
 
 // TODO: to avoid having to wrap every thing printf macro (to prevent
 // a mementos checkpoint in the middle of it, which could be in the
@@ -168,8 +183,10 @@ static fingerprint_t hash_to_fingerprint(value_t key)
 
 static value_t generate_key(value_t prev_key)
 {
+	setGPIO();
 	TASK_BOUNDARY(TASK_GENERATE_KEY, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	// insert pseufo-random integers, for testing
 	// If we use consecutive ints, they hash to consecutive DJB hashes...
@@ -184,22 +201,29 @@ static bool insert(fingerprint_t *filter, value_t key)
 	index_t index_victim, fp_hash_victim;
 	unsigned relocation_count = 0;
 
+	setGPIO();
 	TASK_BOUNDARY(TASK_INSERT_FINGERPRINT, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	fingerprint_t fp = hash_to_fingerprint(key);
 
+	setGPIO();
 	TASK_BOUNDARY(TASK_INSERT_INDEX_1, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	index_t index1 = hash_key_to_index(key);
 
+	setGPIO();
 	TASK_BOUNDARY(TASK_INSERT_INDEX_2, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	index_t fp_hash = hash_fp_to_index(fp);
 	index_t index2 = index1 ^ fp_hash;
 
+	setGPIO();
 	DINO_MANUAL_VERSION_VAL(fingerprint_t, filter[index1], filter_index1);
 	DINO_MANUAL_VERSION_VAL(fingerprint_t, filter[index2], filter_index2);
 	TASK_BOUNDARY(TASK_INSERT_UPDATE, NULL);
@@ -207,6 +231,7 @@ static bool insert(fingerprint_t *filter, value_t key)
 	DINO_MANUAL_REVERT_VAL(filter[index1], filter_index1);
 	DINO_MANUAL_REVERT_VAL(filter[index2], filter_index2);
 	DINO_MANUAL_REVERT_END();
+	unsetGPIO();
 
 	LOG("insert: key %04x fp %04x h %04x i1 %u i2 %u\r\n",
 			key, fp, fp_hash, index1, index2);
@@ -233,15 +258,19 @@ static bool insert(fingerprint_t *filter, value_t key)
 			filter[index_victim] = fp; // evict victim
 
 			do { // relocate victim(s)
+	setGPIO();
 				TASK_BOUNDARY(TASK_RELOCATE_VICTIM, NULL);
 				DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 				fp_hash_victim = hash_fp_to_index(fp_victim);
 				index_victim = index_victim ^ fp_hash_victim;
 
+	setGPIO();
 				DINO_MANUAL_VERSION_VAL(fingerprint_t, filter[index_victim], filter_victim);
 				TASK_BOUNDARY(TASK_RELOCATE_UPDATE, NULL);
 				DINO_MANUAL_RESTORE_VAL(filter[index_victim], filter_victim);
+	unsetGPIO();
 
 				fp_next_victim = filter[index_victim];
 				filter[index_victim] = fp_victim;
@@ -264,24 +293,32 @@ static bool insert(fingerprint_t *filter, value_t key)
 
 static bool lookup(fingerprint_t *filter, value_t key)
 {
+	setGPIO();
 	TASK_BOUNDARY(TASK_LOOKUP_FINGERPRINT, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	fingerprint_t fp = hash_to_fingerprint(key);
 
+	setGPIO();
 	TASK_BOUNDARY(TASK_LOOKUP_INDEX_1, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	index_t index1 = hash_key_to_index(key);
 
+	setGPIO();
 	TASK_BOUNDARY(TASK_LOOKUP_INDEX_2, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	index_t fp_hash = hash_fp_to_index(fp);
 	index_t index2 = index1 ^ fp_hash;
 
+	setGPIO();
 	TASK_BOUNDARY(TASK_LOOKUP_CHECK, NULL);
 	DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
 	LOG("lookup: key %04x fp %04x h %04x i1 %u i2 %u\r\n",
 			key, fp, fp_hash, index1, index2);
@@ -290,11 +327,31 @@ static bool lookup(fingerprint_t *filter, value_t key)
 }
 void init()
 {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
 	init_hw();
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 	EIF_PRINTF(".%u.\r\n", curtask);
 }
 int main()
@@ -327,45 +384,55 @@ int main()
 
 	DINO_RESTORE_CHECK();
 	while (1) {
-		for (i = 0; i < NUM_BUCKETS; ++i)
-			filter[i] = 0;
-		TASK_BOUNDARY(TASK_MAIN, NULL);
-		DINO_MANUAL_RESTORE_NONE();
+		GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+		GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+		for (unsigned loop_idx = 0; loop_idx < 5; loop_idx++) {
+			for (i = 0; i < NUM_BUCKETS; ++i)
+				filter[i] = 0;
+	setGPIO();
+			TASK_BOUNDARY(TASK_MAIN, NULL);
+			DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
 
-		key = INIT_KEY;
-		unsigned inserts = 0;
-		for (i = 0; i < NUM_KEYS; ++i) {
-			key = generate_key(key);
-			bool success = insert(filter, key);
-			LOG("insert: key %04x success %u\r\n", key, success);
-			if (!success)
-				//             PRINTF("insert: key %04x failed\r\n", key);
-				log_filter(filter);
+			key = INIT_KEY;
+			unsigned inserts = 0;
+			for (i = 0; i < NUM_KEYS; ++i) {
+				key = generate_key(key);
+				bool success = insert(filter, key);
+				LOG("insert: key %04x success %u\r\n", key, success);
+				if (!success)
+					//             PRINTF("insert: key %04x failed\r\n", key);
+					//log_filter(filter);
 
-			inserts += success;
+				inserts += success;
 
-		}
-		LOG("inserts/total: %u/%u\r\n", inserts, NUM_KEYS);
-
-		key = INIT_KEY;
-		unsigned members = 0;
-		for (i = 0; i < NUM_KEYS; ++i) {
-			key = generate_key(key);
-			bool member = lookup(filter, key);
-			LOG("lookup: key %04x member %u\r\n", key, member);
-			if (!member) {
-				fingerprint_t fp = hash_to_fingerprint(key);
-				//PRINTF("lookup: key %04x fp %04x not member\r\n", key, fp);
 			}
-			members += member;
+			LOG("inserts/total: %u/%u\r\n", inserts, NUM_KEYS);
+
+			key = INIT_KEY;
+			unsigned members = 0;
+			for (i = 0; i < NUM_KEYS; ++i) {
+				key = generate_key(key);
+				bool member = lookup(filter, key);
+				LOG("lookup: key %04x member %u\r\n", key, member);
+				if (!member) {
+					fingerprint_t fp = hash_to_fingerprint(key);
+					//PRINTF("lookup: key %04x fp %04x not member\r\n", key, fp);
+				}
+				members += member;
+			}
+			LOG("members/total: %u/%u\r\n", members, NUM_KEYS);
+
+	setGPIO();
+			TASK_BOUNDARY(TASK_PRINT_RESULTS, NULL);
+			DINO_MANUAL_RESTORE_NONE();
+	unsetGPIO();
+
+			//print_filter(filter);
+			print_stats(inserts, members, NUM_KEYS);
 		}
-		LOG("members/total: %u/%u\r\n", members, NUM_KEYS);
-
-		TASK_BOUNDARY(TASK_PRINT_RESULTS, NULL);
-		DINO_MANUAL_RESTORE_NONE();
-
-		//print_filter(filter);
-		print_stats(inserts, members, NUM_KEYS);
+		GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+		GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 	}
 
 	return 0;

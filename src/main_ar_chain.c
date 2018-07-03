@@ -8,7 +8,14 @@
 //#include <wisp-base.h>
 #include <libchain/chain.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -21,6 +28,14 @@
 #endif
 
 #include "pins.h"
+
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 // #define SHOW_RESULT_ON_LEDS
 // #define SHOW_PROGRESS_ON_LEDS
@@ -234,6 +249,10 @@ static void init_hw()
 
 void initializeHardware()
 {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+
 	init_hw();
 
     INIT_CONSOLE();
@@ -241,11 +260,30 @@ void initializeHardware()
 
     __enable_interrupt();
 
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
     PRINTF(".%u.\r\n", curctx->task->idx);
 }
 
 void task_init()
 {
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
     //LOG("init\r\n");
 
     uint8_t pin_state = MODE_IDLE;
@@ -269,6 +307,8 @@ void task_selectMode()
 	if(count>=3) pin_state=0;
 	if (count >= 4){
 		PRINTF("done\r\n");
+		GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+		GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 		TRANSITION_TO(task_init);
 	}
     run_mode_t mode;

@@ -3,11 +3,18 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-//#include <libwispbase/wisp-base.h>
+#include <libwispbase/wisp-base.h>
 //#include <wisp-base.h>
 #include <libchain/chain.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -18,6 +25,13 @@
 #include <libedb/edb.h>
 #endif
 
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 #include "pins.h"
 
@@ -412,6 +426,8 @@ void print_long(uint32_t l) {
 #endif
 
 void task_init() {
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
 	uint32_t lzero = 0;
 	unsigned zero = 0;
 	CHAN_OUT1(unsigned, n, zero, MC_OUT_CH(ch_n, task_init, task_start_encrypt, task_start_encrypt3));
@@ -453,17 +469,30 @@ void task_init_key() {
 void task_init_s() {
 	unsigned i;
 	unsigned index = *CHAN_IN2(uint16_t, index, CH(task_init, task_init_s), SELF_CH(task_init_s));
-	for (i = 0; i < 128; ++i){
-		if(index == 0 || index == 1)
-			CHAN_OUT1(uint32_t, s0[index*128 + i], init_s0[index*128 + i], CH(task_init_s, task_encrypt));
-		else if(index == 2 || index == 3)
-			CHAN_OUT1(uint32_t, s1[(index-2)*128 + i], init_s1[(index-2)*128 + i], CH(task_init_s, task_encrypt));
-		else if(index == 4 || index == 5)
-			CHAN_OUT1(uint32_t, s2[(index-4)*128 + i], init_s2[(index-4)*128 + i], CH(task_init_s, task_encrypt));
-		else if(index == 6 || index == 7)
-			CHAN_OUT1(uint32_t, s3[(index-6)*128 + i], init_s3[(index-6)*128 + i], CH(task_init_s, task_encrypt));
+//	for (i = 0; i < 128; ++i){
+//		if(index == 0 || index == 1)
+//			CHAN_OUT1(uint32_t, s0[index*128 + i], init_s0[index*128 + i], CH(task_init_s, task_encrypt));
+//		else if(index == 2 || index == 3)
+//			CHAN_OUT1(uint32_t, s1[(index-2)*128 + i], init_s1[(index-2)*128 + i], CH(task_init_s, task_encrypt));
+//		else if(index == 4 || index == 5)
+//			CHAN_OUT1(uint32_t, s2[(index-4)*128 + i], init_s2[(index-4)*128 + i], CH(task_init_s, task_encrypt));
+//		else if(index == 6 || index == 7)
+//			CHAN_OUT1(uint32_t, s3[(index-6)*128 + i], init_s3[(index-6)*128 + i], CH(task_init_s, task_encrypt));
+//	}
+//	if(index == 7){
+//		TRANSITION_TO(task_set_key);
+//	}
+	for (i = 0; i < 256; ++i){
+		if(index == 0)
+			CHAN_OUT1(uint32_t, s0[index], init_s0[index], CH(task_init_s, task_encrypt));
+		else if(index == 1)
+			CHAN_OUT1(uint32_t, s1[(index)], init_s1[(index)], CH(task_init_s, task_encrypt));
+		else if(index == 2)
+			CHAN_OUT1(uint32_t, s2[(index)], init_s2[(index)], CH(task_init_s, task_encrypt));
+		else if(index == 3)
+			CHAN_OUT1(uint32_t, s3[(index)], init_s3[(index)], CH(task_init_s, task_encrypt));
 	}
-	if(index == 7){
+	if(index == 3){
 		TRANSITION_TO(task_set_key);
 	}
 	else {
@@ -723,7 +752,7 @@ void task_encrypt() {
 	CHAN_OUT2(uint32_t, input[1], r, SELF_CH(task_encrypt),MC_OUT_CH(ch_return, task_encrypt, task_set_key2, task_start_encrypt2));
 	CHAN_OUT2(uint32_t, input[0], l, SELF_CH(task_encrypt),MC_OUT_CH(ch_return, task_encrypt, task_set_key2, task_start_encrypt2));
 	const task_t* next_task = *CHAN_IN2(task_t*, next_task, CH(task_set_key2, task_encrypt), CH(task_start_encrypt, task_encrypt));
-	transition_to(next_task);
+	TRANSITION_TO2(next_task);
 }
 
 void task_start_encrypt() {
@@ -800,6 +829,8 @@ void task_start_encrypt3() {
 
 void task_done()
 {
+	GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 	PRINTF("done\r\n");
 
 	TRANSITION_TO(task_init);
@@ -813,14 +844,34 @@ static void init_hw()
 
 void init()
 {
-    	init_hw();
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+	init_hw();
 
-    INIT_CONSOLE();
+	INIT_CONSOLE();
 
-    __enable_interrupt();
+	__enable_interrupt();
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 
-    PRINTF(".%u.\r\n", curctx->task->idx);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
+
+	PRINTF(".%u.\r\n", curctx->task->idx);
 }
 
-ENTRY_TASK(task_init)
+	ENTRY_TASK(task_init)
 INIT_FUNC(init)

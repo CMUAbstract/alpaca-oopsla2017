@@ -3,11 +3,18 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-//#include <libwispbase/wisp-base.h>
+#include <libwispbase/wisp-base.h>
 //#include <wisp-base.h>
 #include <libchain/chain.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -18,6 +25,14 @@
 #ifdef CONFIG_LIBEDB_PRINTF
 #include <libedb/edb.h>
 #endif
+
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 
 #include "pins.h"
@@ -286,12 +301,32 @@ static void init_hw()
 
 void init()
 {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
 	init_hw();
 
 	INIT_CONSOLE();
 
     __enable_interrupt();
 
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 
     PRINTF(".%u.\r\n", curctx->task->idx);
 }
@@ -299,6 +334,8 @@ void init()
 
 void task_init()
 {
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
     int i;
     digit_t tmp;
     unsigned message_length = sizeof(PLAINTEXT) - 1; // skip the terminating null byte
@@ -548,19 +585,21 @@ void task_print_cyphertext()
                                CH(task_mult_block_get_result, task_print_cyphertext));
     LOG("print cyphertext: len=%u\r\n", cyphertext_len);
 
-    BLOCK_PRINTF_BEGIN();
-    BLOCK_PRINTF("Cyphertext:\r\n");
-    for (i = 0; i < cyphertext_len; ++i) {
-        c = *CHAN_IN1(digit_t, cyphertext[i], CH(task_mult_block_get_result, task_print_cyphertext));
-        BLOCK_PRINTF("%02x ", c);
-        if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
-            BLOCK_PRINTF(" ");
-            j = 0;
-            BLOCK_PRINTF("\r\n");
-        }
-    }
-    BLOCK_PRINTF("\r\n");
-    BLOCK_PRINTF_END();
+//    BLOCK_PRINTF_BEGIN();
+//    BLOCK_PRINTF("Cyphertext:\r\n");
+//    for (i = 0; i < cyphertext_len; ++i) {
+//        c = *CHAN_IN1(digit_t, cyphertext[i], CH(task_mult_block_get_result, task_print_cyphertext));
+//        BLOCK_PRINTF("%02x ", c);
+//        if ((i + 1) % PRINT_HEX_ASCII_COLS == 0) {
+//            BLOCK_PRINTF(" ");
+//            j = 0;
+//            BLOCK_PRINTF("\r\n");
+//        }
+//    }
+//    BLOCK_PRINTF("\r\n");
+//    BLOCK_PRINTF_END();
+	GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
     TRANSITION_TO(task_init);
 }
 
@@ -736,7 +775,7 @@ void task_reduce_normalizable()
         }
 
         const task_t *next_task = *CHAN_IN1(task_t*,next_task, CALL_CH(ch_mult_mod));
-        transition_to(next_task);
+        TRANSITION_TO2(next_task);
     }
 
     LOG("normalizable: %u\r\n", normalizable);
@@ -1187,7 +1226,7 @@ void task_print_product()
 #endif
 
     next_task = *CHAN_IN1(task_t*, next_task, CALL_CH(ch_print_product));
-    transition_to(next_task);
+    TRANSITION_TO2(next_task);
 }
 
 ENTRY_TASK(task_init)

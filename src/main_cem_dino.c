@@ -5,8 +5,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <libwispbase/wisp-base.h>
 #include <libmspbuiltins/builtins.h>
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libmsp/mem.h>
 #include <libmsp/periph.h>
 #include <libmsp/clock.h>
@@ -89,6 +97,15 @@
 #define LETTER_MASK             0x00FF
 #define LETTER_SIZE_BITS             8
 #define NUM_LETTERS (LETTER_MASK + 1)
+
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
+
 typedef unsigned index_t;
 typedef unsigned letter_t;
 typedef unsigned sample_t;
@@ -153,9 +170,11 @@ void init_dict(dict_t *dict)
 	dict->node_count = 0;
 
 	for (l = 0; l < NUM_LETTERS; ++l) {
+		setGPIO();
 		DINO_MANUAL_VERSION_VAL(unsigned, dict->node_count, dict_node_count);
 		TASK_BOUNDARY(TASK_INIT_DICT);
 		DINO_MANUAL_RESTORE_VAL(dict->node_count, dict_node_count);
+		unsetGPIO();
 
 		curtask = l; // HACK for progress display
 
@@ -171,8 +190,10 @@ void init_dict(dict_t *dict)
 
 index_t find_child(letter_t letter, index_t parent, dict_t *dict)
 {
+		setGPIO();
 	TASK_BOUNDARY(TASK_FIND_CHILD);
 	DINO_MANUAL_RESTORE_NONE();
+		unsetGPIO();
 
 	node_t *parent_node = &dict->nodes[parent];
 
@@ -186,8 +207,10 @@ index_t find_child(letter_t letter, index_t parent, dict_t *dict)
 	index_t sibling = parent_node->child;
 	while (sibling != NIL) {
 
+		setGPIO();
 		TASK_BOUNDARY(TASK_FIND_SIBLING);
 		DINO_MANUAL_RESTORE_NONE();
+		unsetGPIO();
 
 		node_t *sibling_node = &dict->nodes[sibling];
 
@@ -208,17 +231,21 @@ index_t find_child(letter_t letter, index_t parent, dict_t *dict)
 
 void add_node(letter_t letter, index_t parent, dict_t *dict)
 {
+		setGPIO();
 	TASK_BOUNDARY(TASK_ADD_NODE);
 	DINO_MANUAL_RESTORE_NONE();
+		unsetGPIO();
 
 	if (dict->node_count == DICT_SIZE) {
 		PRINTF("add node: table full\r\n");
 		while(1); // bail for now
 	}
 
+		setGPIO();
 	DINO_MANUAL_VERSION_VAL(unsigned, dict->node_count, dict_node_count);
 	TASK_BOUNDARY(TASK_ADD_NODE_INIT);
 	DINO_MANUAL_RESTORE_VAL(dict->node_count, dict_node_count);
+		unsetGPIO();
 	// Initialize the new node
 	node_t *node = &dict->nodes[dict->node_count];
 
@@ -241,8 +268,10 @@ void add_node(letter_t letter, index_t parent, dict_t *dict)
 		node_t *sibling_node = &dict->nodes[sibling];
 		while (sibling_node->sibling != NIL) {
 
+		setGPIO();
 			TASK_BOUNDARY(TASK_ADD_NODE_FIND_LAST);
 			DINO_MANUAL_RESTORE_NONE();
+		unsetGPIO();
 
 			LOG("add node: sibling %u, l %u s %u\r\n",
 					sibling, letter, sibling_node->sibling);
@@ -250,15 +279,19 @@ void add_node(letter_t letter, index_t parent, dict_t *dict)
 			sibling_node = &dict->nodes[sibling];
 		}
 
+		setGPIO();
 		TASK_BOUNDARY(TASK_ADD_NODE_LINK_SIBLING);
 		DINO_MANUAL_RESTORE_NONE();
+		unsetGPIO();
 
 		// Link-in the new node
 		LOG("add node: last sibling %u\r\n", sibling);
 		dict->nodes[sibling].sibling = node_index;
 	} else {
+		setGPIO();
 		TASK_BOUNDARY(TASK_ADD_NODE_LINK_CHILD);
 		DINO_MANUAL_RESTORE_NONE();
+		unsetGPIO();
 
 		LOG("add node: is only child\r\n");
 		dict->nodes[parent].child = node_index;
@@ -267,9 +300,11 @@ void add_node(letter_t letter, index_t parent, dict_t *dict)
 
 void append_compressed(index_t parent, log_t *log)
 {
+		setGPIO();
 	DINO_MANUAL_VERSION_VAL(unsigned, log->count, log_count);
 	TASK_BOUNDARY(TASK_APPEND_COMPRESSED);
 	DINO_MANUAL_RESTORE_VAL(log->count, log_count);
+		unsetGPIO();
 
 	LOG("append comp: p %u cnt %u\r\n", parent, log->count);
 	log->data[log->count++] = parent;
@@ -277,12 +312,33 @@ void append_compressed(index_t parent, log_t *log)
 
 void init()
 {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
 	init_hw();
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
 
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 	EIF_PRINTF(".%u.\r\n", curtask);
 }
 
@@ -296,14 +352,10 @@ int main()
 	//	test_func();
 	DINO_RESTORE_CHECK(); 
 
-	TASK_BOUNDARY(TASK_MAIN);
-	DINO_MANUAL_RESTORE_NONE();
 	while (1) {
-		init_dict(&dict);
+		GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+		GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
 
-		// Initialize the pointer into the dictionary to one of the root nodes
-		// Assume all streams start with a fixed prefix ('0'), to avoid having
-		// to letterize this out-of-band sample.
 		letter_t letter = 0;
 
 		unsigned letter_idx = 0;
@@ -313,9 +365,17 @@ int main()
 		log.sample_count = 1; // count the initial sample (see above)
 		log.count = 0; // init compressed counter
 
+		setGPIO();
+		TASK_BOUNDARY(TASK_MAIN);
+		DINO_MANUAL_RESTORE_NONE();
+		unsetGPIO();
+
+		init_dict(&dict);
 		while (1) {
+			setGPIO();
 			TASK_BOUNDARY(TASK_COMPRESS);
 			DINO_MANUAL_RESTORE_NONE();
+			unsetGPIO();
 
 			child = (index_t)letter; // relyes on initialization of dict
 			LOG("compress: parent %u\r\n", child); // naming is odd due to loop
@@ -331,8 +391,10 @@ int main()
 			if (letter_idx == NUM_LETTERS_IN_SAMPLE)
 				letter_idx = 0;
 			do {
+				setGPIO();
 				DINO_MANUAL_VERSION_VAL(unsigned, log.sample_count, log_sample_count);
 				TASK_BOUNDARY(TASK_MAIN);
+				unsetGPIO();
 				DINO_MANUAL_RESTORE_VAL(log.sample_count, log_sample_count);
 
 				unsigned letter_idx_tmp = (letter_idx == 0) ? NUM_LETTERS_IN_SAMPLE : letter_idx - 1; 
@@ -352,11 +414,15 @@ int main()
 
 			if (log.count == BLOCK_SIZE) {
 
+				setGPIO();
 				TASK_BOUNDARY(TASK_PRINT);
 				DINO_MANUAL_RESTORE_NONE();
+				unsetGPIO();
 				print_log(&log);
 				log.count = 0;
 				log.sample_count = 0;
+				GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+				GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 				break;
 			}
 		}

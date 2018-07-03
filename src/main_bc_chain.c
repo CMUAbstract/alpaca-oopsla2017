@@ -1,7 +1,14 @@
 #include <msp430.h>
 #include <stdlib.h>
 
+#ifdef LOGIC
+#define LOG(...)
+#define PRINTF(...)
+#define EIF_PRINTF(...)
+#define INIT_CONSOLE(...)
+#else
 #include <libio/log.h>
+#endif
 #include <libchain/chain.h>
 #include <libmspbuiltins/builtins.h>
 #include <libmsp/mem.h>
@@ -10,11 +17,19 @@
 #include <libmsp/watchdog.h>
 #include <libmsp/gpio.h>
 #include <libmspmath/msp-math.h>
+#include <libwispbase/wisp-base.h>
 
 #ifdef CONFIG_LIBEDB_PRINTF
 #include <libedb/edb.h>
 #endif
 
+__attribute__((interrupt(51))) 
+	void TimerB1_ISR(void){
+		PMMCTL0 = PMMPW | PMMSWPOR;
+		TBCTL |= TBCLR;
+	}
+__attribute__((section("__interrupt_vector_timer0_b1"),aligned(2)))
+void(*__vector_timer0_b1)(void) = TimerB1_ISR;
 
 #include "pins.h"
 
@@ -22,7 +37,7 @@
 #define ITER 100
 #define CHAR_BIT 8
 
-__nv static char bits[256] =
+__nv static char bc_bits[256] =
 {
       0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,  /* 0   - 15  */
       1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,  /* 16  - 31  */
@@ -269,16 +284,39 @@ static void init_hw()
 }
 
 void init() {
+	BITSET(TBCCTL1 , CCIE);
+	TBCCR1 = 100;
+	BITSET(TBCTL , (TBSSEL_1 | ID_3 | MC_2 | TBCLR));
+
 	init_hw();
 
 	INIT_CONSOLE();
 
 	__enable_interrupt();
+#ifdef LOGIC
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
+
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, DIR) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX3, DIR) |= BIT(PIN_AUX_3);
+#ifdef OVERHEAD
+	// When timing overhead, pin 2 is on for
+	// region of interest
+#else
+	// elsewise, pin2 is toggled on boot
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_2);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_2);
+#endif
+#endif
 
     PRINTF(".%u.\r\n", curctx->task->idx);
 }
 
 void task_init() {
+	GPIO(PORT_AUX, OUT) |= BIT(PIN_AUX_1);
+	GPIO(PORT_AUX, OUT) &= ~BIT(PIN_AUX_1);
 	LOG("init\r\n");
 	unsigned func = 0;
 	unsigned n = 0;
@@ -462,7 +500,7 @@ void task_bitcount() {
 	}
 }
 int recursive_cnt(uint32_t x){
-	int cnt = bits[(int)(x & 0x0000000FL)];
+	int cnt = bc_bits[(int)(x & 0x0000000FL)];
 
 	if (0L != (x >>= 4))
 		cnt += recursive_cnt(x);
@@ -496,14 +534,14 @@ void task_ntbl_bitcount() {
 	uint32_t seed = *CHAN_IN2(uint32_t, seed, CH(task_select_func, task_ntbl_bitcount), SELF_CH(task_ntbl_bitcount));
 	uint32_t next_seed = seed + 13;
 	unsigned temp = 0;
-	n += bits[ (int) (seed & 0x0000000FUL)       ] +
-		bits[ (int)((seed & 0x000000F0UL) >> 4) ] +
-		bits[ (int)((seed & 0x00000F00UL) >> 8) ] +
-		bits[ (int)((seed & 0x0000F000UL) >> 12)] +
-		bits[ (int)((seed & 0x000F0000UL) >> 16)] +
-		bits[ (int)((seed & 0x00F00000UL) >> 20)] +
-		bits[ (int)((seed & 0x0F000000UL) >> 24)] +
-		bits[ (int)((seed & 0xF0000000UL) >> 28)];
+	n += bc_bits[ (int) (seed & 0x0000000FUL)       ] +
+		bc_bits[ (int)((seed & 0x000000F0UL) >> 4) ] +
+		bc_bits[ (int)((seed & 0x00000F00UL) >> 8) ] +
+		bc_bits[ (int)((seed & 0x0000F000UL) >> 12)] +
+		bc_bits[ (int)((seed & 0x000F0000UL) >> 16)] +
+		bc_bits[ (int)((seed & 0x00F00000UL) >> 20)] +
+		bc_bits[ (int)((seed & 0x0F000000UL) >> 24)] +
+		bc_bits[ (int)((seed & 0xF0000000UL) >> 28)];
 	CHAN_OUT2(unsigned, n, n, CH(task_ntbl_bitcount, task_end), SELF_CH(task_ntbl_bitcount));
 	iter++;
 	CHAN_OUT1(unsigned, iter, iter, SELF_CH(task_ntbl_bitcount));
@@ -531,8 +569,8 @@ void task_BW_btbl_bitcount() {
 
 	U.y = seed; 
 
-	n += bits[ U.ch[0] ] + bits[ U.ch[1] ] + 
-		bits[ U.ch[3] ] + bits[ U.ch[2] ]; 
+	n += bc_bits[ U.ch[0] ] + bc_bits[ U.ch[1] ] + 
+		bc_bits[ U.ch[3] ] + bc_bits[ U.ch[2] ]; 
 	CHAN_OUT2(unsigned, n, n, CH(task_BW_btbl_bitcount, task_end), SELF_CH(task_BW_btbl_bitcount));
 	iter++;
 	CHAN_OUT1(unsigned, iter, iter, SELF_CH(task_BW_btbl_bitcount));
@@ -555,10 +593,10 @@ void task_AR_btbl_bitcount() {
 	unsigned char * Ptr = (unsigned char *) &seed ;
 	int Accu ;
 
-	Accu  = bits[ *Ptr++ ];
-	Accu += bits[ *Ptr++ ];
-	Accu += bits[ *Ptr++ ];
-	Accu += bits[ *Ptr ];
+	Accu  = bc_bits[ *Ptr++ ];
+	Accu += bc_bits[ *Ptr++ ];
+	Accu += bc_bits[ *Ptr++ ];
+	Accu += bc_bits[ *Ptr ];
 	n+= Accu;
 	CHAN_OUT2(unsigned, n, n, CH(task_AR_btbl_bitcount, task_end), SELF_CH(task_AR_btbl_bitcount));
 	iter++;
@@ -600,6 +638,8 @@ void task_bit_shifter() {
 }
 
 void task_end() {
+	GPIO(PORT_AUX3, OUT) |= BIT(PIN_AUX_3);
+	GPIO(PORT_AUX3, OUT) &= ~BIT(PIN_AUX_3);
 	LOG("end\r\n");
 	unsigned n_0 = *CHAN_IN1(unsigned, n, CH(task_bit_count, task_end));
 	unsigned n_1 = *CHAN_IN1(unsigned, n, CH(task_bitcount, task_end));
